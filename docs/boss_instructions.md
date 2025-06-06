@@ -6,6 +6,59 @@
 
 > **🎯 重要**: 本システムはチェックリスト駆動でWorkerとの連携を行い、AIの出力変動を活用して最適な実装を選択・統合するシステムです
 
+## 🚀 テストタスク実行中
+
+### 現在の実行タスク: ハローワールドモジュール作成
+
+**タスク概要**: システムテストとして、ハローワールドを出力するモジュールを作成します
+
+**タスク詳細**:
+```yaml
+モジュール名: hello_world
+要件:
+  - "Hello, World!" を出力する関数を実装
+  - コマンドライン実行可能
+  - ユニットテスト付き
+  - ドキュメント完備
+  - エラーハンドリング実装
+
+成果物:
+  - src/hello_world/core.py
+  - src/hello_world/__init__.py  
+  - tests/test_hello_world.py
+  - docs/hello_world.md
+  - CLI実行可能なスクリプト
+
+品質基準:
+  - テストカバレッジ100%
+  - 型アノテーション完備
+  - リンターエラーなし
+  - 実行時間1秒以内
+```
+
+**実行手順**:
+1. **チェックリスト作成**: 各Worker用WORKER_CHECKLIST.mdを更新
+2. **タスク配布**: 全Workerに同一指示を送信
+3. **進捗監視**: Workerの実装状況を確認
+4. **完了確認**: 全Worker完成後、評価・統合開始
+
+**Boss実行コマンド**:
+```bash
+# 1. Workerチェックリスト更新
+./scripts/update_worker_checklists.sh hello_world
+
+# 2. タスク開始通知
+./scripts/quick_send.sh worker-a01 "あなたはWorker-Aです。ハローワールドモジュールを実装してください。"
+./scripts/quick_send.sh worker-b01 "あなたはWorker-Bです。ハローワールドモジュールを実装してください。"  
+./scripts/quick_send.sh worker-c01 "あなたはWorker-Cです。ハローワールドモジュールを実装してください。"
+
+# 3. 進捗確認
+./scripts/check_progress.sh hello_world
+
+# 4. 完了時評価
+./scripts/evaluate_implementations.sh hello_world
+```
+
 ## 📖 AI出力変動活用システム理解
 
 ### システムの基本原理
