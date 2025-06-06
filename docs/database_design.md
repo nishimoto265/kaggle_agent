@@ -1,11 +1,12 @@
-# Kaggle Agent Database Design (Supabase)
+# Kaggle Agent データベース設計書 (Supabase)
+
 **Version**: 0.1  
 **Date**: 2025-06-05  
 **Database**: Supabase PostgreSQL with Real-time
 
 ## 概要
 
-KaggleエージェントシステムのSupabaseデータベース設計。PostgreSQL + リアルタイム機能 + 自動API生成を活用した効率的なデータ管理を実現。
+Kaggle Agent システムのためのSupabaseデータベース設計。PostgreSQL + リアルタイム機能 + 自動API生成を活用した効率的なデータ管理を実現。アーキテクチャで定義された6つのアプリケーションモジュールの状態管理とデータフローをサポートします。
 
 ## アーキテクチャ
 
@@ -40,267 +41,322 @@ graph TB
     RT -->|WebSocket| WEB
 ```
 
-## コアエンティティ設計
+## 設計原則
 
-### 1. Competitions (コンペティション管理)
+1. **正規化**: 重複を最小化し、データ整合性を保証
+2. **パフォーマンス**: 頻繁なクエリパターンに最適化されたインデックス
+3. **スケーラビリティ**: 大量のコンペティション/実行データに対応
+4. **監査性**: すべての重要な操作を追跡
+5. **型安全性**: PostgreSQLの厳密な型システムを活用
+
+## コアエンティティモデル
+
+### 1. Competitions（コンペティション）
 
 ```sql
--- competitions テーブル
 CREATE TABLE competitions (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    kaggle_id TEXT UNIQUE NOT NULL,
-    title TEXT NOT NULL,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    kaggle_id VARCHAR(100) UNIQUE NOT NULL,
+    title VARCHAR(500) NOT NULL,
     description TEXT,
-    category TEXT NOT NULL,
-    reward INTEGER,
-    team_count INTEGER,
+    problem_type VARCHAR(50) NOT NULL, -- 'tabular', 'nlp', 'cv', 'time_series'
+    dataset_size_gb DECIMAL(10,2),
+    participant_count INTEGER,
+    prize_pool DECIMAL(12,2),
     deadline TIMESTAMPTZ NOT NULL,
-    evaluation_metric TEXT NOT NULL,
-    dataset_size BIGINT,
-    
-    -- ステータス管理
-    status competition_status DEFAULT 'discovered',
-    priority competition_priority DEFAULT 'medium',
-    
-    -- エージェント判断
-    feasibility_score DECIMAL(3,2) CHECK (feasibility_score >= 0 AND feasibility_score <= 1),
-    estimated_cost DECIMAL(10,2),
-    estimated_duration INTERVAL,
-    
-    -- メタデータ
+    evaluation_metric VARCHAR(100),
+    submission_format TEXT,
+    data_availability VARCHAR(50), -- 'public', 'private', 'restricted'
+    difficulty_score DECIMAL(3,2), -- 0.0 - 1.0
+    tags TEXT[], -- ARRAY of tags
+    external_data_allowed BOOLEAN DEFAULT false,
+    team_limit INTEGER,
+    daily_submission_limit INTEGER,
+    discovery_source VARCHAR(100), -- 'kaggle_api', 'manual', 'recommendation'
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    deleted_at TIMESTAMPTZ
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Enum types
-CREATE TYPE competition_status AS ENUM (
-    'discovered', 'analyzing', 'researching', 'coding', 
-    'training', 'submitting', 'completed', 'abandoned'
-);
-
-CREATE TYPE competition_priority AS ENUM (
-    'low', 'medium', 'high', 'urgent'
-);
-
--- Indexes
-CREATE INDEX idx_competitions_status ON competitions(status);
+CREATE INDEX idx_competitions_kaggle_id ON competitions(kaggle_id);
 CREATE INDEX idx_competitions_deadline ON competitions(deadline);
-CREATE INDEX idx_competitions_priority ON competitions(priority);
+CREATE INDEX idx_competitions_problem_type ON competitions(problem_type);
+CREATE INDEX idx_competitions_discovery_source ON competitions(discovery_source);
 ```
 
-### 2. Research Results (研究結果管理)
+### 2. Agent Executions（エージェント実行）
 
 ```sql
--- research_sessions テーブル
-CREATE TABLE research_sessions (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    competition_id UUID REFERENCES competitions(id) ON DELETE CASCADE,
-    
-    query_text TEXT NOT NULL,
-    status research_status DEFAULT 'pending',
-    
-    -- Deep Research結果
-    research_plan JSONB,
-    findings JSONB,
-    citations JSONB,
-    audio_summary_url TEXT,
-    confidence_score DECIMAL(3,2),
-    
-    -- 処理時間
-    started_at TIMESTAMPTZ DEFAULT NOW(),
-    completed_at TIMESTAMPTZ,
-    duration_seconds INTEGER,
-    
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TYPE research_status AS ENUM (
-    'pending', 'processing', 'completed', 'failed'
-);
-
--- research_approaches テーブル  
-CREATE TABLE research_approaches (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    research_session_id UUID REFERENCES research_sessions(id) ON DELETE CASCADE,
-    
-    title TEXT NOT NULL,
-    description TEXT,
-    approach_type approach_type NOT NULL,
-    complexity_level complexity_level NOT NULL,
-    
-    -- 評価スコア
-    relevance_score DECIMAL(3,2),
-    innovation_score DECIMAL(3,2),
-    feasibility_score DECIMAL(3,2),
-    final_rank INTEGER,
-    
-    -- 実装情報
-    required_frameworks TEXT[],
-    estimated_training_time INTERVAL,
-    estimated_cost DECIMAL(10,2),
-    
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TYPE approach_type AS ENUM (
-    'ensemble', 'deep_learning', 'traditional_ml', 'feature_engineering', 'preprocessing'
-);
-
-CREATE TYPE complexity_level AS ENUM (
-    'baseline', 'intermediate', 'advanced', 'research'
-);
-```
-
-### 3. Code Generation & Execution
-
-```sql
--- code_generations テーブル
-CREATE TABLE code_generations (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    competition_id UUID REFERENCES competitions(id) ON DELETE CASCADE,
-    approach_id UUID REFERENCES research_approaches(id) ON DELETE SET NULL,
-    
-    -- 生成要求
-    task_description TEXT NOT NULL,
-    requirements JSONB,
-    constraints JSONB,
-    target_framework TEXT NOT NULL,
-    
-    -- 生成結果
-    status code_status DEFAULT 'pending',
-    generated_code JSONB, -- {main_script, training_script, inference_script, etc.}
-    dockerfile TEXT,
-    requirements_txt TEXT,
-    documentation TEXT,
-    
-    -- Claude API情報
-    claude_model TEXT,
-    total_tokens INTEGER,
-    cost_usd DECIMAL(10,4),
-    
-    -- 処理時間
-    started_at TIMESTAMPTZ DEFAULT NOW(),
-    completed_at TIMESTAMPTZ,
-    
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TYPE code_status AS ENUM (
-    'pending', 'generating', 'completed', 'failed', 'validated'
-);
-
--- training_jobs テーブル
-CREATE TABLE training_jobs (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    competition_id UUID REFERENCES competitions(id) ON DELETE CASCADE,
-    code_generation_id UUID REFERENCES code_generations(id) ON DELETE CASCADE,
-    
-    -- GPU設定
-    gpu_type TEXT NOT NULL,
-    container_config JSONB,
-    environment_vars JSONB,
-    
-    -- 実行状況
-    status training_status DEFAULT 'pending',
-    salad_container_group_id TEXT,
-    salad_job_id TEXT,
-    
-    -- リソース使用状況
+CREATE TABLE agent_executions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    competition_id UUID NOT NULL REFERENCES competitions(id) ON DELETE CASCADE,
+    execution_name VARCHAR(200) NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'pending', 
+    -- 'pending', 'data_acquisition', 'research', 'code_generation', 'training', 'human_review', 'submission', 'completed', 'failed', 'cancelled'
+    priority INTEGER DEFAULT 0, -- Higher = more priority
+    gpu_budget_dollars DECIMAL(8,2) DEFAULT 0.15,
+    gpu_budget_consumed DECIMAL(8,2) DEFAULT 0.0,
+    target_submission_hours INTEGER DEFAULT 24,
+    current_step INTEGER DEFAULT 1, -- 1-10 workflow steps
+    error_message TEXT,
+    human_intervention_required BOOLEAN DEFAULT false,
+    human_intervention_reason TEXT,
     started_at TIMESTAMPTZ,
     completed_at TIMESTAMPTZ,
-    duration_seconds INTEGER,
-    gpu_hours DECIMAL(10,4),
-    cost_usd DECIMAL(10,4),
-    
-    -- 結果
-    model_metrics JSONB,
-    logs TEXT,
-    error_message TEXT,
-    
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TYPE training_status AS ENUM (
-    'pending', 'queued', 'running', 'completed', 'failed', 'cancelled'
-);
+CREATE INDEX idx_agent_executions_competition_id ON agent_executions(competition_id);
+CREATE INDEX idx_agent_executions_status ON agent_executions(status);
+CREATE INDEX idx_agent_executions_priority ON agent_executions(priority DESC);
+CREATE INDEX idx_agent_executions_created_at ON agent_executions(created_at);
 ```
 
-### 4. Submissions & Results
+### 3. Research Results（調査結果）
 
 ```sql
--- submissions テーブル
-CREATE TABLE submissions (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    competition_id UUID REFERENCES competitions(id) ON DELETE CASCADE,
-    training_job_id UUID REFERENCES training_jobs(id) ON DELETE SET NULL,
-    
-    -- Kaggle submission情報
-    kaggle_submission_id TEXT,
-    submission_message TEXT,
-    
-    -- スコア
-    public_score DECIMAL(10,6),
-    private_score DECIMAL(10,6),
-    leaderboard_rank INTEGER,
-    
-    -- ステータス
-    status submission_status DEFAULT 'pending',
-    
-    -- ファイル情報  
-    submission_file_path TEXT, -- Supabase Storage path
-    file_size_bytes BIGINT,
-    
-    submitted_at TIMESTAMPTZ DEFAULT NOW(),
-    scored_at TIMESTAMPTZ,
+CREATE TABLE research_results (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    execution_id UUID NOT NULL REFERENCES agent_executions(id) ON DELETE CASCADE,
+    research_type VARCHAR(50) NOT NULL, -- 'academic_papers', 'kaggle_solutions', 'documentation', 'code_examples'
+    query_text TEXT NOT NULL,
+    source_api VARCHAR(50) NOT NULL, -- 'google_deep_research', 'arxiv', 'kaggle_api'
+    raw_response JSONB NOT NULL,
+    processed_insights TEXT[],
+    relevance_score DECIMAL(3,2), -- 0.0 - 1.0
+    citation_count INTEGER DEFAULT 0,
+    research_duration_seconds INTEGER,
+    tokens_consumed INTEGER,
+    cost_dollars DECIMAL(8,4),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TYPE submission_status AS ENUM (
-    'pending', 'submitted', 'scored', 'failed'
-);
+CREATE INDEX idx_research_results_execution_id ON research_results(execution_id);
+CREATE INDEX idx_research_results_research_type ON research_results(research_type);
+CREATE INDEX idx_research_results_relevance_score ON research_results(relevance_score DESC);
+CREATE INDEX idx_research_results_source_api ON research_results(source_api);
 ```
 
-### 5. Human Loop Management
+### 4. Generated Code（生成コード）
 
 ```sql
--- human_decisions テーブル
-CREATE TABLE human_decisions (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    competition_id UUID REFERENCES competitions(id) ON DELETE CASCADE,
-    
-    decision_type decision_type NOT NULL,
-    context JSONB NOT NULL,
-    options JSONB NOT NULL,
-    
-    -- 決定結果
-    status decision_status DEFAULT 'pending',
-    selected_option TEXT,
-    human_feedback TEXT,
-    
-    -- 通知情報
-    notification_sent_at TIMESTAMPTZ,
-    notification_channels TEXT[], -- ['slack', 'discord', 'email']
-    
-    -- タイムアウト
-    expires_at TIMESTAMPTZ,
-    
+CREATE TABLE generated_code (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    execution_id UUID NOT NULL REFERENCES agent_executions(id) ON DELETE CASCADE,
+    code_type VARCHAR(50) NOT NULL, -- 'eda', 'preprocessing', 'model', 'training', 'inference', 'submission'
+    file_name VARCHAR(200) NOT NULL,
+    file_path VARCHAR(500),
+    code_content TEXT NOT NULL,
+    programming_language VARCHAR(20) DEFAULT 'python',
+    dependencies TEXT[], -- Required packages
+    execution_order INTEGER, -- Order of execution in pipeline
+    estimated_runtime_minutes INTEGER,
+    memory_requirements_gb DECIMAL(5,2),
+    gpu_required BOOLEAN DEFAULT false,
+    validation_status VARCHAR(50) DEFAULT 'pending', -- 'pending', 'valid', 'invalid', 'needs_review'
+    validation_errors TEXT[],
+    human_approved BOOLEAN DEFAULT false,
+    model_api_used VARCHAR(50), -- 'claude_code', 'custom'
+    tokens_consumed INTEGER,
+    cost_dollars DECIMAL(8,4),
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    decided_at TIMESTAMPTZ,
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TYPE decision_type AS ENUM (
-    'competition_selection', 'approach_approval', 'budget_approval', 
-    'submission_approval', 'error_handling'
+CREATE INDEX idx_generated_code_execution_id ON generated_code(execution_id);
+CREATE INDEX idx_generated_code_code_type ON generated_code(code_type);
+CREATE INDEX idx_generated_code_execution_order ON generated_code(execution_order);
+CREATE INDEX idx_generated_code_validation_status ON generated_code(validation_status);
+```
+
+### 5. GPU Sessions（GPU セッション）
+
+```sql
+CREATE TABLE gpu_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    execution_id UUID NOT NULL REFERENCES agent_executions(id) ON DELETE CASCADE,
+    provider VARCHAR(50) NOT NULL, -- 'salad_cloud', 'vast_ai', 'lambda_labs'
+    instance_id VARCHAR(200), -- Provider's instance ID
+    instance_type VARCHAR(100) NOT NULL, -- e.g., 'RTX4090', 'A100'
+    gpu_count INTEGER DEFAULT 1,
+    memory_gb INTEGER,
+    storage_gb INTEGER,
+    hourly_rate_dollars DECIMAL(6,4),
+    region VARCHAR(50),
+    status VARCHAR(50) NOT NULL DEFAULT 'provisioning',
+    -- 'provisioning', 'running', 'idle', 'terminated', 'failed'
+    provisioned_at TIMESTAMPTZ,
+    terminated_at TIMESTAMPTZ,
+    total_runtime_minutes INTEGER DEFAULT 0,
+    total_cost_dollars DECIMAL(8,4) DEFAULT 0.0,
+    cost_limit_dollars DECIMAL(8,4),
+    auto_terminate_at TIMESTAMPTZ,
+    ssh_connection_info JSONB, -- Encrypted connection details
+    error_message TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TYPE decision_status AS ENUM (
-    'pending', 'decided', 'expired', 'cancelled'
+CREATE INDEX idx_gpu_sessions_execution_id ON gpu_sessions(execution_id);
+CREATE INDEX idx_gpu_sessions_provider ON gpu_sessions(provider);
+CREATE INDEX idx_gpu_sessions_status ON gpu_sessions(status);
+CREATE INDEX idx_gpu_sessions_auto_terminate_at ON gpu_sessions(auto_terminate_at);
+```
+
+### 6. Training Jobs（訓練ジョブ）
+
+```sql
+CREATE TABLE training_jobs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    execution_id UUID NOT NULL REFERENCES agent_executions(id) ON DELETE CASCADE,
+    gpu_session_id UUID REFERENCES gpu_sessions(id) ON DELETE SET NULL,
+    code_id UUID NOT NULL REFERENCES generated_code(id) ON DELETE CASCADE,
+    job_name VARCHAR(200) NOT NULL,
+    model_type VARCHAR(100), -- 'xgboost', 'lightgbm', 'neural_network', 'transformer'
+    hyperparameters JSONB,
+    dataset_split JSONB, -- train/val/test split configuration
+    status VARCHAR(50) NOT NULL DEFAULT 'queued',
+    -- 'queued', 'running', 'completed', 'failed', 'cancelled'
+    started_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ,
+    runtime_minutes INTEGER,
+    peak_memory_gb DECIMAL(6,2),
+    gpu_utilization_percent DECIMAL(5,2),
+    best_validation_score DECIMAL(10,6),
+    final_test_score DECIMAL(10,6),
+    model_artifacts_path VARCHAR(500), -- S3/MinIO path
+    logs_path VARCHAR(500),
+    metrics JSONB, -- Training metrics history
+    early_stopping_epoch INTEGER,
+    total_epochs INTEGER,
+    error_message TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE INDEX idx_training_jobs_execution_id ON training_jobs(execution_id);
+CREATE INDEX idx_training_jobs_gpu_session_id ON training_jobs(gpu_session_id);
+CREATE INDEX idx_training_jobs_status ON training_jobs(status);
+CREATE INDEX idx_training_jobs_best_validation_score ON training_jobs(best_validation_score DESC);
+```
+
+### 7. Submissions（提出）
+
+```sql
+CREATE TABLE submissions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    execution_id UUID NOT NULL REFERENCES agent_executions(id) ON DELETE CASCADE,
+    training_job_id UUID REFERENCES training_jobs(id) ON DELETE SET NULL,
+    submission_file_path VARCHAR(500) NOT NULL,
+    description TEXT,
+    kaggle_submission_id VARCHAR(100),
+    public_score DECIMAL(10,6),
+    private_score DECIMAL(10,6),
+    public_rank INTEGER,
+    private_rank INTEGER,
+    total_participants INTEGER,
+    submission_status VARCHAR(50) DEFAULT 'pending',
+    -- 'pending', 'submitted', 'scored', 'failed', 'disqualified'
+    submitted_at TIMESTAMPTZ,
+    scored_at TIMESTAMPTZ,
+    error_message TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_submissions_execution_id ON submissions(execution_id);
+CREATE INDEX idx_submissions_public_score ON submissions(public_score DESC);
+CREATE INDEX idx_submissions_submission_status ON submissions(submission_status);
+CREATE INDEX idx_submissions_submitted_at ON submissions(submitted_at);
+```
+
+### 8. Human Interventions（人的介入）
+
+```sql
+CREATE TABLE human_interventions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    execution_id UUID NOT NULL REFERENCES agent_executions(id) ON DELETE CASCADE,
+    intervention_type VARCHAR(50) NOT NULL,
+    -- 'approval_required', 'error_review', 'strategy_change', 'manual_override'
+    priority VARCHAR(20) DEFAULT 'medium', -- 'low', 'medium', 'high', 'critical'
+    status VARCHAR(50) DEFAULT 'pending', -- 'pending', 'reviewed', 'approved', 'rejected', 'escalated'
+    title VARCHAR(200) NOT NULL,
+    description TEXT NOT NULL,
+    context_data JSONB, -- Relevant data for decision making
+    assigned_to VARCHAR(100), -- User email/ID
+    response TEXT,
+    response_data JSONB, -- Structured response from human
+    notification_sent BOOLEAN DEFAULT false,
+    notification_method VARCHAR(50), -- 'slack', 'discord', 'email'
+    escalation_count INTEGER DEFAULT 0,
+    sla_deadline TIMESTAMPTZ, -- When response is needed by
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    responded_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_human_interventions_execution_id ON human_interventions(execution_id);
+CREATE INDEX idx_human_interventions_status ON human_interventions(status);
+CREATE INDEX idx_human_interventions_priority ON human_interventions(priority);
+CREATE INDEX idx_human_interventions_sla_deadline ON human_interventions(sla_deadline);
+```
+
+### 9. System Metrics（システムメトリクス）
+
+```sql
+CREATE TABLE system_metrics (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    metric_name VARCHAR(100) NOT NULL,
+    metric_value DECIMAL(15,6) NOT NULL,
+    metric_type VARCHAR(50) NOT NULL, -- 'counter', 'gauge', 'histogram'
+    tags JSONB, -- Key-value pairs for grouping
+    execution_id UUID REFERENCES agent_executions(id) ON DELETE SET NULL,
+    component VARCHAR(50), -- 'competition_discovery', 'research', 'code_generation', etc.
+    timestamp TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_system_metrics_metric_name ON system_metrics(metric_name);
+CREATE INDEX idx_system_metrics_timestamp ON system_metrics(timestamp);
+CREATE INDEX idx_system_metrics_execution_id ON system_metrics(execution_id);
+CREATE INDEX idx_system_metrics_component ON system_metrics(component);
+```
+
+### 10. Configuration（設定）
+
+```sql
+CREATE TABLE configurations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    config_key VARCHAR(200) UNIQUE NOT NULL,
+    config_value JSONB NOT NULL,
+    config_type VARCHAR(50) NOT NULL, -- 'system', 'api', 'gpu', 'model', 'notification'
+    description TEXT,
+    is_encrypted BOOLEAN DEFAULT false,
+    is_sensitive BOOLEAN DEFAULT false,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_configurations_config_key ON configurations(config_key);
+CREATE INDEX idx_configurations_config_type ON configurations(config_type);
+```
+
+## リレーションシップダイアグラム
+
+```mermaid
+erDiagram
+    competitions ||--o{ agent_executions : "has"
+    agent_executions ||--o{ research_results : "produces"
+    agent_executions ||--o{ generated_code : "generates"
+    agent_executions ||--o{ gpu_sessions : "uses"
+    agent_executions ||--o{ training_jobs : "runs"
+    agent_executions ||--o{ submissions : "creates"
+    agent_executions ||--o{ human_interventions : "requires"
+    
+    gpu_sessions ||--o{ training_jobs : "hosts"
+    generated_code ||--o{ training_jobs : "uses"
+    training_jobs ||--o{ submissions : "produces"
+    
+    agent_executions ||--o{ system_metrics : "generates"
 ```
 
 ## Supabase特有機能の活用
@@ -310,17 +366,18 @@ CREATE TYPE decision_status AS ENUM (
 ```sql
 -- Enable RLS
 ALTER TABLE competitions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE research_sessions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE code_generations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE agent_executions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE research_results ENABLE ROW LEVEL SECURITY;
+ALTER TABLE generated_code ENABLE ROW LEVEL SECURITY;
 ALTER TABLE training_jobs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE submissions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE human_decisions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE human_interventions ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies (基本的な読み取り権限)
 CREATE POLICY "Enable read access for authenticated users" ON competitions
     FOR SELECT USING (auth.role() = 'authenticated');
 
-CREATE POLICY "Enable read access for authenticated users" ON research_sessions
+CREATE POLICY "Enable read access for authenticated users" ON agent_executions
     FOR SELECT USING (auth.role() = 'authenticated');
 ```
 
@@ -329,9 +386,10 @@ CREATE POLICY "Enable read access for authenticated users" ON research_sessions
 ```sql
 -- Real-time subscriptions有効化
 ALTER PUBLICATION supabase_realtime ADD TABLE competitions;
+ALTER PUBLICATION supabase_realtime ADD TABLE agent_executions;
 ALTER PUBLICATION supabase_realtime ADD TABLE training_jobs;
 ALTER PUBLICATION supabase_realtime ADD TABLE submissions;
-ALTER PUBLICATION supabase_realtime ADD TABLE human_decisions;
+ALTER PUBLICATION supabase_realtime ADD TABLE human_interventions;
 ```
 
 ### 3. Storage Buckets設定
@@ -345,28 +403,132 @@ INSERT INTO storage.buckets (id, name, public) VALUES
     ('logs', 'logs', false);
 ```
 
-## インデックス戦略
+## データアクセスパターン
+
+### 1. 読み取り集約クエリ
+
+最も頻繁なクエリパターンに対する最適化:
+
+#### コンペティション発見ダッシュボード
+```sql
+-- Active competitions with execution statistics
+SELECT 
+    c.*,
+    COUNT(ae.id) as execution_count,
+    MAX(ae.created_at) as last_execution,
+    AVG(s.public_score) as avg_score
+FROM competitions c
+LEFT JOIN agent_executions ae ON c.id = ae.competition_id
+LEFT JOIN submissions s ON ae.id = s.execution_id
+WHERE c.deadline > NOW()
+GROUP BY c.id
+ORDER BY c.deadline ASC;
+```
+
+#### 実行進捗追跡
+```sql
+-- Execution progress with current step details
+SELECT 
+    ae.*,
+    c.title as competition_title,
+    c.deadline,
+    gs.status as gpu_status,
+    gs.total_cost_dollars as gpu_cost,
+    COUNT(hi.id) as pending_interventions
+FROM agent_executions ae
+JOIN competitions c ON ae.competition_id = c.id
+LEFT JOIN gpu_sessions gs ON ae.id = gs.execution_id AND gs.status IN ('running', 'idle')
+LEFT JOIN human_interventions hi ON ae.id = hi.execution_id AND hi.status = 'pending'
+WHERE ae.status NOT IN ('completed', 'failed', 'cancelled')
+GROUP BY ae.id, c.id, gs.id;
+```
+
+## パフォーマンス最適化
+
+### 1. パーティショニング戦略
 
 ```sql
--- パフォーマンス最適化用インデックス
-CREATE INDEX CONCURRENTLY idx_research_sessions_competition_status 
-    ON research_sessions(competition_id, status);
+-- Time-based partitioning for high-volume tables
+CREATE TABLE system_metrics (
+    -- ... columns ...
+) PARTITION BY RANGE (timestamp);
 
-CREATE INDEX CONCURRENTLY idx_training_jobs_status_created 
-    ON training_jobs(status, created_at);
+CREATE TABLE system_metrics_2024_01 PARTITION OF system_metrics
+    FOR VALUES FROM ('2024-01-01') TO ('2024-02-01');
+```
 
-CREATE INDEX CONCURRENTLY idx_submissions_competition_score 
-    ON submissions(competition_id, public_score DESC NULLS LAST);
+### 2. マテリアライズドビュー
 
-CREATE INDEX CONCURRENTLY idx_human_decisions_status_expires 
-    ON human_decisions(status, expires_at);
+```sql
+-- Execution summary materialized view
+CREATE MATERIALIZED VIEW execution_summary AS
+SELECT 
+    ae.id,
+    ae.competition_id,
+    ae.status,
+    ae.gpu_budget_consumed,
+    COUNT(DISTINCT rr.id) as research_count,
+    COUNT(DISTINCT gc.id) as code_files_count,
+    COUNT(DISTINCT tj.id) as training_jobs_count,
+    COUNT(DISTINCT s.id) as submissions_count,
+    MAX(s.public_score) as best_score,
+    ae.created_at,
+    ae.updated_at
+FROM agent_executions ae
+LEFT JOIN research_results rr ON ae.id = rr.execution_id
+LEFT JOIN generated_code gc ON ae.id = gc.execution_id
+LEFT JOIN training_jobs tj ON ae.id = tj.execution_id
+LEFT JOIN submissions s ON ae.id = s.execution_id
+GROUP BY ae.id;
 
--- JSONB検索用インデックス
-CREATE INDEX CONCURRENTLY idx_research_sessions_findings_gin 
-    ON research_sessions USING GIN (findings);
+CREATE UNIQUE INDEX idx_execution_summary_id ON execution_summary(id);
+```
 
-CREATE INDEX CONCURRENTLY idx_code_generations_requirements_gin 
-    ON code_generations USING GIN (requirements);
+## データ保持ポリシー
+
+### 1. 自動クリーンアップ
+
+```sql
+-- Clean up old system metrics (keep 90 days)
+DELETE FROM system_metrics 
+WHERE timestamp < NOW() - INTERVAL '90 days';
+
+-- Archive completed executions (keep 1 year)
+DELETE FROM agent_executions 
+WHERE status IN ('completed', 'failed') 
+AND completed_at < NOW() - INTERVAL '1 year';
+```
+
+### 2. バックアップ戦略
+
+- **フル日次バックアップ**: すべてのテーブル
+- **増分時間別バックアップ**: メトリクスとログテーブル
+- **ポイントインタイム復旧**: 24時間のWAL保持
+
+## セキュリティ考慮事項
+
+### 1. Row Level Security (RLS)
+
+```sql
+-- Enable RLS on sensitive tables
+ALTER TABLE configurations ENABLE ROW LEVEL SECURITY;
+
+-- Policy for configuration access
+CREATE POLICY config_access_policy ON configurations
+    FOR ALL TO authenticated
+    USING (NOT is_sensitive OR auth.role() = 'admin');
+```
+
+### 2. 暗号化
+
+```sql
+-- Encrypt sensitive configuration values
+CREATE OR REPLACE FUNCTION encrypt_config_value(value TEXT)
+RETURNS TEXT AS $$
+BEGIN
+    RETURN pgp_sym_encrypt(value, current_setting('app.encryption_key'));
+END;
+$$ LANGUAGE plpgsql;
 ```
 
 ## 関数・トリガー
@@ -386,8 +548,8 @@ CREATE TRIGGER update_competitions_updated_at
     BEFORE UPDATE ON competitions 
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_research_sessions_updated_at 
-    BEFORE UPDATE ON research_sessions 
+CREATE TRIGGER update_agent_executions_updated_at 
+    BEFORE UPDATE ON agent_executions 
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- コスト計算関数
@@ -406,60 +568,72 @@ END;
 $$ LANGUAGE plpgsql;
 ```
 
-## データ型定義（TypeScript）
+## 型定義とバリデーション
 
-```typescript
-// Supabase自動生成型に追加する型定義
-export interface Database {
-  public: {
-    Tables: {
-      competitions: {
-        Row: Competition;
-        Insert: Omit<Competition, 'id' | 'created_at' | 'updated_at'>;
-        Update: Partial<Competition>;
-      };
-      research_sessions: {
-        Row: ResearchSession;
-        Insert: Omit<ResearchSession, 'id' | 'created_at' | 'updated_at'>;
-        Update: Partial<ResearchSession>;
-      };
-      // ... 他のテーブル
-    };
-    Functions: {
-      calculate_training_cost: {
-        Args: { gpu_hours: number; gpu_type: string };
-        Returns: number;
-      };
-    };
-  };
-}
-```
-
-## マイグレーション戦略
-
-### 1. 初期セットアップマイグレーション
+### 1. カスタムドメイン型
 
 ```sql
--- 20250605000001_initial_schema.sql
--- ENUMs作成
--- テーブル作成  
--- インデックス作成
--- RLS設定
--- ストレージバケット作成
+-- Custom domain types for validation
+CREATE DOMAIN email AS TEXT 
+CHECK (VALUE ~ '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$');
+
+CREATE DOMAIN percentage AS DECIMAL(5,2)
+CHECK (VALUE >= 0 AND VALUE <= 100);
+
+CREATE DOMAIN positive_decimal AS DECIMAL(15,6)
+CHECK (VALUE >= 0);
 ```
 
-### 2. データ投入マイグレーション
+### 2. JSON スキーマバリデーション
 
 ```sql
--- 20250605000002_seed_data.sql
--- 初期競技データ
--- サンプルデータ
+-- JSON schema validation functions
+CREATE OR REPLACE FUNCTION validate_hyperparameters(params JSONB)
+RETURNS BOOLEAN AS $$
+BEGIN
+    -- Validate required fields and types
+    RETURN (
+        params ? 'learning_rate' AND 
+        (params->>'learning_rate')::DECIMAL > 0 AND
+        params ? 'epochs' AND
+        (params->>'epochs')::INTEGER > 0
+    );
+END;
+$$ LANGUAGE plpgsql;
+
+ALTER TABLE training_jobs 
+ADD CONSTRAINT valid_hyperparameters 
+CHECK (validate_hyperparameters(hyperparameters));
 ```
 
-### 3. バージョン管理
+## 移行戦略
 
-- Supabase CLI使用
-- Git管理
-- 本番環境での段階的適用
+### 1. 段階的移行
 
-これでSupabaseを活用したデータベース設計が完成です！次は設定管理システム設計に進みますか？ 
+1. **フェーズ1**: コアテーブル（competitions, agent_executions）
+2. **フェーズ2**: 研究とコード生成テーブル
+3. **フェーズ3**: GPU とトレーニングテーブル
+4. **フェーズ4**: メトリクスと設定テーブル
+
+### 2. 移行検証
+
+```sql
+-- Data integrity checks
+SELECT 
+    'agent_executions' as table_name,
+    COUNT(*) as row_count,
+    COUNT(DISTINCT competition_id) as unique_competitions,
+    MIN(created_at) as earliest_record,
+    MAX(created_at) as latest_record
+FROM agent_executions
+UNION ALL
+SELECT 
+    'training_jobs',
+    COUNT(*),
+    COUNT(DISTINCT execution_id),
+    MIN(created_at),
+    MAX(created_at)
+FROM training_jobs;
+```
+
+このデータベース設計により、Kaggle Agent システムの全ライフサイクルをサポートし、高パフォーマンス、スケーラビリティ、および保守性を提供します。 
