@@ -68,11 +68,15 @@ pytest tests/ --cov=src
 ruff check src/
 mypy src/
 
-# 4. 完了時に他Worker確認
-grep -r "\[x\] \*\*実装完成\*\*" ../01worker-*/WORKER_CHECKLIST.md
+# 4. 実装完成をチェックリストにマーク
+sed -i 's/\[ \] \*\*実装完成\*\*/[x] **実装完成**/' WORKER_CHECKLIST.md
 
-# 5. 全Worker完了時にBoss報告
-./scripts/quick_send.sh boss01 "実装が完了しました。"
+# 5. 全Worker完了チェック＆Boss報告（自動）
+../../scripts/check_all_workers_done.sh
+
+# または手動で他Worker確認
+# ORG_NUM=$(pwd | grep -o 'org-[0-9][0-9]' | tail -1)
+# grep "\[x\] \*\*実装完成\*\*" ../01worker-*/WORKER_CHECKLIST.md
 ```
 
 ## 📖 システム理解
@@ -149,15 +153,69 @@ vim WORKER_CHECKLIST.md  # "実装完成"にチェック
 
 ### 4. 他Worker確認・最終報告
 ```bash
-# 他Workerの完成状況確認
-grep "\[x\] \*\*実装完成\*\*" ../01worker-a/WORKER_CHECKLIST.md
-grep "\[x\] \*\*実装完成\*\*" ../01worker-b/WORKER_CHECKLIST.md  
-grep "\[x\] \*\*実装完成\*\*" ../01worker-c/WORKER_CHECKLIST.md
+# 自分の実装完成後、他Workerチェック開始
+echo "🔍 他Workerの完成状況を確認中..."
 
-# 全Worker完成時にBoss報告
-if [ "全Worker完成" ]; then
-    ./scripts/quick_send.sh boss "実装が完了しました。"
-    vim WORKER_CHECKLIST.md  # "Boss報告完了"にチェック
+# 現在の組織番号を取得
+ORG_NUM=$(pwd | grep -o 'org-[0-9][0-9]' | tail -1)
+
+# 他Workerの完成状況確認
+WORKER_A_DONE=$(grep "\[x\] \*\*実装完成\*\*" ../01worker-a/WORKER_CHECKLIST.md 2>/dev/null && echo "1" || echo "0")
+WORKER_B_DONE=$(grep "\[x\] \*\*実装完成\*\*" ../01worker-b/WORKER_CHECKLIST.md 2>/dev/null && echo "1" || echo "0")
+WORKER_C_DONE=$(grep "\[x\] \*\*実装完成\*\*" ../01worker-c/WORKER_CHECKLIST.md 2>/dev/null && echo "1" || echo "0")
+
+echo "Worker-A: $([ $WORKER_A_DONE -eq 1 ] && echo '✅完了' || echo '⏳作業中')"
+echo "Worker-B: $([ $WORKER_B_DONE -eq 1 ] && echo '✅完了' || echo '⏳作業中')"
+echo "Worker-C: $([ $WORKER_C_DONE -eq 1 ] && echo '✅完了' || echo '⏳作業中')"
+
+# 全Worker完成判定
+TOTAL_DONE=$((WORKER_A_DONE + WORKER_B_DONE + WORKER_C_DONE))
+
+if [ $TOTAL_DONE -eq 3 ]; then
+    echo "🎉 全Worker完成！Boss に報告します"
+    
+    # 組織番号からboss指定を決定
+    case $ORG_NUM in
+        "org-01") BOSS_TARGET="boss01" ;;
+        "org-02") BOSS_TARGET="boss02" ;;
+        "org-03") BOSS_TARGET="boss03" ;;
+        "org-04") BOSS_TARGET="boss04" ;;
+        *) BOSS_TARGET="boss01" ;;
+    esac
+    
+    # Boss報告実行
+    ../../scripts/quick_send.sh $BOSS_TARGET "実装が完了しました。"
+    
+    # チェックリスト更新
+    sed -i 's/\[ \] \*\*Boss報告完了\*\*/[x] **Boss報告完了**/' WORKER_CHECKLIST.md
+    
+    echo "✅ Boss報告完了"
+else
+    echo "⏳ 他のWorkerの完了を待機中 ($TOTAL_DONE/3)"
+    echo "💡 30秒後に再チェックします"
+    
+    # 30秒待機後に再チェック（バックグラウンド）
+    (sleep 30 && bash -c '
+        # 再チェック実行
+        WORKER_A_DONE=$(grep "\[x\] \*\*実装完成\*\*" ../01worker-a/WORKER_CHECKLIST.md 2>/dev/null && echo "1" || echo "0")
+        WORKER_B_DONE=$(grep "\[x\] \*\*実装完成\*\*" ../01worker-b/WORKER_CHECKLIST.md 2>/dev/null && echo "1" || echo "0")
+        WORKER_C_DONE=$(grep "\[x\] \*\*実装完成\*\*" ../01worker-c/WORKER_CHECKLIST.md 2>/dev/null && echo "1" || echo "0")
+        TOTAL_DONE=$((WORKER_A_DONE + WORKER_B_DONE + WORKER_C_DONE))
+        
+        if [ $TOTAL_DONE -eq 3 ]; then
+            echo "🎉 全Worker完成確認！Boss に報告"
+            ORG_NUM=$(pwd | grep -o "org-[0-9][0-9]" | tail -1)
+            case $ORG_NUM in
+                "org-01") BOSS_TARGET="boss01" ;;
+                "org-02") BOSS_TARGET="boss02" ;;
+                "org-03") BOSS_TARGET="boss03" ;;
+                "org-04") BOSS_TARGET="boss04" ;;
+                *) BOSS_TARGET="boss01" ;;
+            esac
+            ../../scripts/quick_send.sh $BOSS_TARGET "実装が完了しました。"
+            sed -i "s/\[ \] \*\*Boss報告完了\*\*/[x] **Boss報告完了**/" WORKER_CHECKLIST.md
+        fi
+    ') &
 fi
 ```
 
