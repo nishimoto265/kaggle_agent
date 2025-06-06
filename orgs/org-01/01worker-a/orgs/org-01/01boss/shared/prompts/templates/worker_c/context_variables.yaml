@@ -1,0 +1,5 @@
+constraints: object
+evaluation_criteria: list
+progress_status: object
+reference_files: list
+task_info: string

@@ -1,10 +1,10 @@
 # 🤖 Worker実装指示書
 
-**Version**: 2.0 (AI出力変動活用システム)  
-**Target**: 全Worker（worker1, worker2, worker3）  
-**Update**: 2025-06-05
+**Version**: 3.0 (チェックリスト駆動ワークフロー)  
+**Target**: 全Worker（worker-a, worker-b, worker-c）  
+**Update**: 2025-06-06
 
-> **🎯 重要**: 本システムはAIの出力変動（randomness/fluctuation）を活用し、同一プロンプトから異なる実装を生成して最適解を選択するシステムです
+> **🎯 重要**: 本システムはチェックリスト駆動でBossから受け取ったタスクを実装し、完了時に他Workerと連携して最終報告を行うシステムです
 
 ## 📖 システム理解
 
@@ -29,76 +29,67 @@
   - 他Workerを意識せず、ベストを尽くす
 ```
 
-## ⚡ 実装プロセス
+## ⚡ チェックリスト駆動実装プロセス
 
-### 1. タスク受信・理解フェーズ
+### 1. タスク受信・チェックリスト確認
 ```bash
+# Boss通知確認
+ls ../../../shared_messages/to_worker-*.md
+
+# Workerチェックリスト確認
+cat WORKER_CHECKLIST.md
+
 # Boss指示書確認
 cat CLAUDE.md
-cat instruction_final_boss.md
-
-# 要件詳細確認
-./scripts/analyze_requirements.py
 ```
 
-### 2. 実装戦略決定
-```yaml
-戦略決定観点:
-  技術選択:
-    - 最適なアルゴリズム・フレームワーク選択
-    - パフォーマンス要件に適した実装方法
-    - 保守性を考慮した設計パターン
-    - 将来拡張を意識したアーキテクチャ
-
-  品質確保:
-    - 堅牢なエラーハンドリング
-    - 包括的なテストケース
-    - 明確なドキュメンテーション
-    - コードレビュー可能な構造
-```
-
-### 3. 実装実行
+### 2. チェックリスト駆動実装
 ```bash
-# プロジェクト初期化
-./scripts/init_implementation.py --task-id ${TASK_ID}
+# チェックリスト項目に沿って順次実装
+# 各項目完了時にチェックマーク更新
 
-# コア実装
-vim src/main.py
-vim src/utils.py
-vim src/config.py
+# 要件理解・設計フェーズ
+vim WORKER_CHECKLIST.md  # 設計項目チェック
 
-# テスト実装
-vim tests/test_main.py
-vim tests/integration_test.py
+# コア実装フェーズ
+vim src/[module]/  # 実装
+vim WORKER_CHECKLIST.md  # 実装項目チェック
 
-# ドキュメント作成
-vim README.md
-vim docs/design.md
+# テスト実装フェーズ
+vim tests/  # テスト作成
+vim WORKER_CHECKLIST.md  # テスト項目チェック
+
+# ドキュメント作成フェーズ
+vim docs/  # ドキュメント作成
+vim WORKER_CHECKLIST.md  # ドキュメント項目チェック
 ```
 
-### 4. 品質検証
+### 3. 品質確認・自己チェック
 ```bash
-# 静的解析
+# 全項目完了確認
+grep "\[ \]" WORKER_CHECKLIST.md  # 未完了項目確認
+
+# 品質基準クリア確認
+pytest tests/ --cov=src
 ruff check src/
 mypy src/
 
-# ユニットテスト
-pytest tests/ -v --cov=src
-
-# 統合テスト
-python tests/integration_test.py
-
-# パフォーマンステスト
-python tests/performance_test.py
+# 自己確認完了
+vim WORKER_CHECKLIST.md  # "実装完成"にチェック
 ```
 
-### 5. 最終提出準備
+### 4. 他Worker確認・最終報告
 ```bash
-# 実装完了報告
-./scripts/report_completion.py --implementation-path ./
+# 他Workerの完成状況確認
+grep "\[x\] \*\*実装完成\*\*" ../01worker-a/WORKER_CHECKLIST.md
+grep "\[x\] \*\*実装完成\*\*" ../01worker-b/WORKER_CHECKLIST.md  
+grep "\[x\] \*\*実装完成\*\*" ../01worker-c/WORKER_CHECKLIST.md
 
-# Boss評価用情報生成
-./scripts/generate_evaluation_report.py
+# 全Worker完成時にBoss報告
+if [ "全Worker完成" ]; then
+    ./scripts/quick_send.sh boss "実装が完了しました。"
+    vim WORKER_CHECKLIST.md  # "Boss報告完了"にチェック
+fi
 ```
 
 ## 📊 評価観点の理解

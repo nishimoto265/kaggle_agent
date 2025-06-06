@@ -1,10 +1,10 @@
 # 🎯 Boss統合管理指示書
 
-**Version**: 2.0 (AI出力変動活用システム)  
+**Version**: 3.0 (チェックリスト駆動ワークフロー)  
 **Role**: Boss (統括・評価・統合担当)  
-**Update**: 2025-06-05
+**Update**: 2025-06-06
 
-> **🎯 重要**: 本システムはAIの出力変動（randomness/fluctuation）を活用し、同一プロンプトから生成された3つの異なる実装を評価・統合するシステムです
+> **🎯 重要**: 本システムはチェックリスト駆動でWorkerとの連携を行い、AIの出力変動を活用して最適な実装を選択・統合するシステムです
 
 ## 📖 AI出力変動活用システム理解
 
@@ -33,38 +33,54 @@
     - 最終品質保証
 ```
 
-## ⚡ 実装プロセス管理
+## ⚡ チェックリスト駆動実装プロセス
 
-### Phase 1: 統一タスク配布
+### Phase 1: タスク準備・チェックリスト作成
 ```bash
-# 1. タスク仕様作成
-./scripts/create_unified_task.py --module-name ${MODULE_NAME} --requirements ${REQUIREMENTS}
+# 1. モジュール定義確認
+cat PROJECT_CHECKLIST.md  # 全体進捗確認
 
-# 2. 同一プロンプト生成
-./scripts/generate_unified_prompt.py --task-spec ./tasks/${MODULE_NAME}.yml
+# 2. Workerチェックリスト具体化
+# 各worker/WORKER_CHECKLIST.mdを編集
+vim orgs/org-XX/01worker-a/WORKER_CHECKLIST.md
+vim orgs/org-XX/01worker-b/WORKER_CHECKLIST.md  
+vim orgs/org-XX/01worker-c/WORKER_CHECKLIST.md
 
-# 3. 全Worker同時配布
-./scripts/distribute_task.py --prompt ./prompts/${MODULE_NAME}.md --workers 1,2,3
+# 3. 統一タスク開始通知
+./scripts/quick_send.sh all-workers "あなたはワーカーです。指示書に従って実装を行ってください。"
 ```
 
-### Phase 2: 進捗監視
+### Phase 2: Worker完了待ち・進捗監視
 ```bash
-# リアルタイム進捗確認
-./scripts/monitor_workers.py --update-interval 30m
+# Worker完了通知確認
+ls shared_messages/to_boss_*.md  # 完了メッセージ確認
 
-# 進捗レポート生成
-./scripts/generate_progress_report.py
+# Workerチェックリスト進捗確認
+grep "\[x\]" orgs/org-XX/01worker-*/WORKER_CHECKLIST.md
+
+# 全Worker完成確認
+check_all_workers_complete() {
+    for worker in worker-a worker-b worker-c; do
+        if grep -q "\[x\] \*\*実装完成\*\*" orgs/org-XX/01${worker}/WORKER_CHECKLIST.md; then
+            echo "✅ ${worker} 完成"
+        else
+            echo "⏳ ${worker} 実装中"
+        fi
+    done
+}
 ```
 
-### Phase 3: 実装評価・統合
+### Phase 3: 採点・評価・統合
 ```bash
-# 実装収集・評価
-./scripts/collect_implementations.py --workers 1,2,3
-./scripts/evaluate_implementations.py --criteria ./evaluation/criteria.yml
+# 全Worker完成後の採点開始
+./scripts/evaluate_implementations.py --org org-XX --module ${MODULE_NAME}
 
-# 統合戦略決定・実行
-./scripts/decide_integration_strategy.py
-./scripts/execute_integration.py --strategy ${STRATEGY}
+# 最優秀実装選択・統合
+./scripts/select_best_implementation.py
+./scripts/integrate_to_main.py --selected ${BEST_WORKER}
+
+# PROJECT_CHECKLIST.md更新
+./scripts/update_project_progress.py --completed ${MODULE_NAME}
 ```
 
 ## 📊 実装評価システム
