@@ -1,109 +1,182 @@
-# 外部API統合設計書
+# API統合設計書
 
-*バージョン 0.1 — 2025-06-05*
+**Version**: 0.1  
+**Date**: 2025-06-05  
+**総API数**: 5つ
 
----
+## 概要
 
-## 目次
-1. [概要](#1-概要)
-2. [Kaggle API統合](#2-kaggle-api統合)
-3. [Google Deep Research API統合](#3-google-deep-research-api統合)
-4. [Claude Code API統合](#4-claude-code-api統合)
-5. [SaladCloud API統合](#5-saladcloud-api統合)
-6. [通知API統合](#6-通知api統合)
-7. [共通設計原則](#7-共通設計原則)
-8. [実装計画](#8-実装計画)
+Kaggle Agent システムで使用する外部APIの統合設計。各APIの認証、レート制限、エラーハンドリング、データモデルを統一的に管理し、高い可用性と信頼性を提供します。
 
----
+## 共通設計パターン
 
-## 1. 概要
-
-### 1.1 設計方針
-
-```yaml
-api_integration_principles:
-  reliability:
-    - "すべてのAPI呼び出しにリトライ機能"
-    - "サーキットブレーカーパターンの実装"
-    - "タイムアウト設定の統一"
-  
-  performance:
-    - "非同期処理による並行実行"
-    - "レスポンスキャッシュの活用"
-    - "バッチ処理の最適化"
-  
-  security:
-    - "API トークンの安全な管理"
-    - "リクエスト/レスポンスのログ制御"
-    - "レート制限の遵守"
-  
-  maintainability:
-    - "統一されたエラーハンドリング"
-    - "構造化されたデータモデル"
-    - "テスタブルな設計"
-```
-
-### 1.2 共通データ構造
+### 1. 認証システム
 
 ```python
-from dataclasses import dataclass
-from datetime import datetime
-from enum import Enum
-from typing import Optional, Dict, Any, List
-
-class APIStatus(Enum):
-    SUCCESS = "success"
-    RATE_LIMITED = "rate_limited"
-    ERROR = "error"
-    TIMEOUT = "timeout"
-
-@dataclass
-class APIResponse:
-    status: APIStatus
-    data: Optional[Any]
-    error_message: Optional[str]
-    response_time: float
-    timestamp: datetime
-    retry_count: int = 0
-```
-
-## 2. Kaggle API統合
-
-### 2.1 認証・設定
-
-```python
-@dataclass
-class KaggleConfig:
-    username: str
-    key: str
-    base_url: str = "https://www.kaggle.com/api/v1"
-    timeout: float = 30.0
-    max_retries: int = 3
-    rate_limit: int = 200  # per hour
-
-class KaggleClient:
-    def __init__(self, config: KaggleConfig):
-        self.config = config
-        self.session = self._create_session()
-        self.rate_limiter = RateLimiter(config.rate_limit, window=3600)
+class AuthenticationManager:
+    """統一認証管理システム"""
     
-    def _create_session(self) -> httpx.AsyncClient:
-        return httpx.AsyncClient(
-            auth=(self.config.username, self.config.key),
-            timeout=self.config.timeout,
-            headers={"User-Agent": "kaggle-agent/0.1"}
-        )
+    SUPPORTED_TYPES = ["api_key", "bearer_token", "basic_auth", "google_cloud_bearer_token"]
+    
+    def __init__(self):
+        self.rotation_period = timedelta(days=30)
+        self.storage_backend = "vault"  # HashiCorp Vault
+    
+    async def get_credentials(self, api_name: str) -> Dict[str, str]:
+        """API別認証情報を取得"""
+        pass
+    
+    async def rotate_credentials(self, api_name: str) -> bool:
+        """認証情報の自動ローテーション"""
+        pass
 ```
 
-### 2.2 データモデル
+### 2. レート制限管理
 
+```python
+class RateLimitManager:
+    """トークンバケット式レート制限"""
+    
+    def __init__(self):
+        self.strategy = "token_bucket"
+        self.backoff_strategy = "exponential"
+        self.max_backoff = 300  # seconds
+        self.jitter_enabled = True
+    
+    async def acquire_token(self, api_name: str, endpoint: str) -> bool:
+        """APIトークン取得"""
+        pass
+    
+    async def handle_rate_limit(self, api_name: str, retry_after: int) -> None:
+        """レート制限時の待機処理"""
+        pass
+```
+
+### 3. 統一リトライポリシー
+
+```python
+@dataclass
+class RetryPolicy:
+    max_attempts: int = 3
+    retry_conditions: List[str] = field(default_factory=lambda: [
+        "network_timeout", "rate_limit_exceeded", "temporary_server_error"
+    ])
+    no_retry_conditions: List[str] = field(default_factory=lambda: [
+        "authentication_failed", "invalid_request", "resource_not_found"
+    ])
+    
+class RetryManager:
+    async def execute_with_retry(self, func: Callable, policy: RetryPolicy) -> Any:
+        """統一リトライ実行"""
+        pass
+```
+
+### 4. タイムアウト設定
+
+```python
+@dataclass
+class TimeoutSettings:
+    connection_timeout: int = 10  # seconds
+    read_timeout: int = 30
+    total_timeout: int = 60
+```
+
+### 5. エラーハンドリング
+
+```python
+class ErrorHandler:
+    def __init__(self):
+        self.log_level = "INFO"
+        self.alert_on_consecutive_failures = 3
+        self.circuit_breaker_threshold = 5
+    
+    async def handle_error(self, api_name: str, error: Exception) -> None:
+        """統一エラー処理"""
+        pass
+```
+
+## API別詳細設計
+
+### 1. Kaggle API
+
+**目的**: コンペティション発見・データセット取得・提出管理
+
+#### 基本設定
+```yaml
+base_url: "https://www.kaggle.com/api/v1"
+authentication: "basic_auth"
+credentials:
+  username: "${KAGGLE_USERNAME}"
+  password: "${KAGGLE_KEY}"
+```
+
+#### レート制限
+- **一般API**: 200リクエスト/時間
+- **データダウンロード**: 10リクエスト/時間  
+- **提出**: 5リクエスト/日
+
+#### エンドポイント設計
+
+##### コンペティション一覧
+```python
+@dataclass
+class CompetitionsListRequest:
+    group: Optional[str] = "general"  # general, entered, inClass
+    category: Optional[str] = "all"   # all, featured, research, etc.
+    sort_by: Optional[str] = "earliestDeadline"
+    page: Optional[int] = 1
+    search: Optional[str] = None
+
+class KaggleAPI:
+    async def list_competitions(self, request: CompetitionsListRequest) -> List[Competition]:
+        """コンペティション一覧取得 (キャッシュ: 1時間)"""
+        pass
+```
+
+##### コンペティション詳細
+```python
+async def get_competition_detail(self, competition_id: str) -> Competition:
+    """コンペティション詳細取得 (キャッシュ: 6時間)"""
+    pass
+```
+
+##### データセットダウンロード
+```python
+async def download_dataset(self, competition_id: str, save_path: str) -> bool:
+    """
+    データセットダウンロード
+    - タイムアウト: 300秒
+    - プログレスバー表示
+    - 部分ダウンロード対応
+    """
+    pass
+```
+
+##### 提出処理
+```python
+@dataclass
+class SubmissionRequest:
+    competition_id: str
+    file_path: str
+    message: Optional[str] = None
+
+async def submit_predictions(self, request: SubmissionRequest) -> SubmissionResult:
+    """提出ファイルアップロード"""
+    pass
+
+async def get_submission_status(self, competition_id: str) -> List[SubmissionResult]:
+    """提出状況確認 (キャッシュ: 5分)"""
+    pass
+```
+
+#### データモデル
 ```python
 @dataclass
 class Competition:
     id: str
     title: str
     url: str
-    description: str
+    description: Optional[str]
     category: str
     reward: Optional[int]
     team_count: int
@@ -111,509 +184,503 @@ class Competition:
     user_rank: Optional[int]
     deadline: datetime
     evaluation_metric: str
-    submission_count: int
-    max_team_size: int
-    
-    @property
-    def is_active(self) -> bool:
-        return datetime.now() < self.deadline
-
-@dataclass
-class DatasetInfo:
-    competition_id: str
-    total_bytes: int
-    files: List[Dict[str, Any]]
-    download_url: str
-    last_modified: datetime
 
 @dataclass
 class SubmissionResult:
     id: str
-    competition_id: str
+    file_name: str
     public_score: Optional[float]
     private_score: Optional[float]
-    status: str
+    status: str  # "complete", "error", "pending"
     submitted_at: datetime
-    file_name: str
 ```
 
-### 2.3 主要メソッド
+### 2. Google Agentspace Deep Research
 
-```python
-class KaggleClient:
-    async def list_competitions(
-        self, 
-        category: Optional[str] = None,
-        group: str = "general",
-        sort_by: str = "deadline"
-    ) -> List[Competition]:
-        """アクティブなコンペティション一覧を取得"""
-        
-    async def get_competition_metadata(
-        self, 
-        competition_id: str
-    ) -> Competition:
-        """特定のコンペティション詳細を取得"""
-        
-    async def download_dataset(
-        self, 
-        competition_id: str,
-        download_path: str
-    ) -> DatasetInfo:
-        """データセットをダウンロード"""
-        
-    async def submit_predictions(
-        self, 
-        competition_id: str,
-        file_path: str,
-        message: str
-    ) -> SubmissionResult:
-        """予測結果を提出"""
-        
-    async def get_submission_status(
-        self, 
-        submission_id: str
-    ) -> SubmissionResult:
-        """提出状況を確認"""
+**目的**: 深層リサーチによる競技解法調査
+
+#### 基本設定
+```yaml
+base_url: "https://discoveryengine.googleapis.com/v1alpha"
+authentication: "google_cloud_bearer_token"
+project_id: "${GOOGLE_CLOUD_PROJECT_ID}"
+app_id: "${GOOGLE_AGENTSPACE_APP_ID}"
 ```
 
-## 3. Google Agentspace Deep Research統合
+#### レート制限
+- **一般API**: 100リクエスト/時間
+- **ストリーミング**: 50リクエスト/時間
 
-### 3.1 設定・認証
+#### エンドポイント設計
 
 ```python
 @dataclass
-class AgentspaceConfig:
-    project_id: str
-    app_id: str
-    assistant_id: str = "default_assistant"
-    base_url: str = "https://discoveryengine.googleapis.com/v1alpha"
-    timeout: float = 60.0
-    max_retries: int = 3
-    rate_limit: int = 100  # per hour
-    max_query_length: int = 1000
+class ResearchRequest:
+    query: str
+    context: Optional[str] = None
+    max_tokens: int = 8000
+    temperature: float = 0.1
+    include_citations: bool = True
 
-class AgentspaceClient:
-    def __init__(self, config: AgentspaceConfig):
-        self.config = config
-        self.session = self._create_session()
-        self.rate_limiter = RateLimiter(config.rate_limit, window=3600)
-    
-    def _create_session(self) -> httpx.AsyncClient:
-        # Google Cloud認証用のセッション作成
-        return httpx.AsyncClient(
-            timeout=self.config.timeout,
-            headers={"Content-Type": "application/json"}
-        )
-    
-    async def _get_auth_token(self) -> str:
-        """Google Cloud認証トークンを取得"""
-        # gcloud auth print-access-token の実装
+@dataclass 
+class ResearchResponse:
+    answer: str
+    citations: List[Citation]
+    confidence_score: float
+    processing_time_ms: int
+
+class GoogleAgentspaceAPI:
+    async def stream_research(self, request: ResearchRequest) -> AsyncIterator[ResearchResponse]:
+        """ストリーミングリサーチ実行"""
         pass
 ```
 
-### 3.2 データモデル
+### 3. Claude API (Anthropic)
 
-```python
-@dataclass
-class ResearchQuery:
-    text: str
-    domain: str = "machine_learning"
-    time_range: Optional[str] = "2020-2025"
-    max_results: int = 10
-    include_code: bool = True
+**目的**: コード生成・解析・改善提案
 
-@dataclass
-class ResearchResult:
-    title: str
-    summary: str
-    url: Optional[str]
-    authors: List[str]
-    publication_date: Optional[datetime]
-    relevance_score: float
-    technical_difficulty: str  # "beginner", "intermediate", "advanced"
-    implementation_complexity: str  # "low", "medium", "high"
-    resource_requirements: Dict[str, Any]
-
-@dataclass
-class RankedApproach:
-    approach_name: str
-    research_results: List[ResearchResult]
-    overall_score: float
-    feasibility_score: float
-    innovation_score: float
-    resource_score: float
-    synthesis: str
+#### 基本設定
+```yaml
+base_url: "https://api.anthropic.com/v1"
+authentication: "bearer_token"
+api_key: "${ANTHROPIC_API_KEY}"
 ```
 
-### 3.3 主要メソッド
+#### レート制限
+- **Claude Code**: 1000リクエスト/分
+- **Claude Sonnet**: 500リクエスト/分
 
-```python
-class AgentspaceClient:
-    async def stream_research(
-        self, 
-        query: str
-    ) -> AsyncGenerator[ResearchResult, None]:
-        """Deep Researchクエリをストリーミング実行"""
-        auth_token = await self._get_auth_token()
-        url = f"{self.config.base_url}/projects/{self.config.project_id}/locations/global/collections/default_collection/engines/{self.config.app_id}/assistants/{self.config.assistant_id}:streamAssist"
-        
-        payload = {
-            "query": {"text": query},
-            "answerGenerationMode": "research"
-        }
-        
-        headers = {
-            "Authorization": f"Bearer {auth_token}",
-            "X-Goog-User-Project": self.config.project_id
-        }
-        
-        # ストリーミングレスポンスの処理
-        async with self.session.stream("POST", url, json=payload, headers=headers) as response:
-            async for chunk in response.aiter_text():
-                yield self._parse_research_chunk(chunk)
-        
-    async def execute_research(
-        self, 
-        query: ResearchQuery
-    ) -> List[ResearchResult]:
-        """研究クエリを実行（非ストリーミング）"""
-        results = []
-        async for result in self.stream_research(query.text):
-            results.append(result)
-        return results
-        
-    async def batch_research(
-        self, 
-        queries: List[ResearchQuery],
-        max_concurrent: int = 3
-    ) -> Dict[str, List[ResearchResult]]:
-        """複数クエリの並行実行"""
-        semaphore = asyncio.Semaphore(max_concurrent)
-        
-        async def execute_single_query(query: ResearchQuery):
-            async with semaphore:
-                return await self.execute_research(query)
-        
-        tasks = {query.text: execute_single_query(query) for query in queries}
-        return await asyncio.gather(*tasks.values(), return_exceptions=True)
-```
-
-## 4. Claude Code API統合
-
-### 4.1 設定・認証
-
-```python
-@dataclass
-class ClaudeConfig:
-    api_key: str
-    model: str = "claude-3-sonnet-20240229"
-    base_url: str = "https://api.anthropic.com/v1"
-    timeout: float = 120.0
-    max_retries: int = 3
-    rate_limit: int = 1000  # per hour
-    max_tokens: int = 4000
-
-class ClaudeClient:
-    def __init__(self, config: ClaudeConfig):
-        self.config = config
-        self.session = self._create_session()
-        self.rate_limiter = RateLimiter(config.rate_limit, window=3600)
-```
-
-### 4.2 データモデル
+#### エンドポイント設計
 
 ```python
 @dataclass
 class CodeGenerationRequest:
-    task_description: str
-    requirements: List[str]
-    constraints: List[str]
-    preferred_libraries: List[str]
-    target_framework: str  # "pytorch", "tensorflow", "sklearn"
-    complexity_level: str  # "baseline", "intermediate", "advanced"
-
-@dataclass
-class CodeBundle:
-    main_script: str
-    training_script: str
-    inference_script: str
-    requirements_txt: str
-    dockerfile: str
-    documentation: str
-    estimated_runtime: float  # hours
-    estimated_memory: float  # GB
-
-@dataclass
-class HyperParameterConfig:
-    model_params: Dict[str, Any]
-    training_params: Dict[str, Any]
-    optimization_strategy: str
-    search_space: Dict[str, Any]
-```
-
-### 4.3 主要メソッド
-
-```python
-class ClaudeClient:
-    async def generate_baseline_code(
-        self, 
-        request: CodeGenerationRequest
-    ) -> CodeBundle:
-        """ベースラインコードを生成"""
-        
-    async def optimize_hyperparameters(
-        self, 
-        code_bundle: CodeBundle,
-        performance_target: float
-    ) -> HyperParameterConfig:
-        """ハイパーパラメータを最適化"""
-        
-    async def review_and_improve(
-        self, 
-        code: str,
-        feedback: str
-    ) -> str:
-        """コードレビューと改善"""
-```
-
-## 5. SaladCloud API統合
-
-### 5.1 設定・認証
-
-```python
-@dataclass
-class SaladCloudConfig:
-    api_key: str
-    organization_name: str
-    base_url: str = "https://api.salad.com/api/public"
-    timeout: float = 60.0
-    max_retries: int = 3
-    rate_limit: int = 500  # per hour
-
-class SaladCloudClient:
-    def __init__(self, config: SaladCloudConfig):
-        self.config = config
-        self.session = self._create_session()
-        self.rate_limiter = RateLimiter(config.rate_limit, window=3600)
-```
-
-### 5.2 データモデル
-
-```python
-@dataclass
-class GPUSpec:
-    gpu_type: str  # "GTX1650", "RTX3060", "RTX4090"
-    vram_gb: int
-    cpu_cores: int
-    ram_gb: int
-    storage_gb: int
-    hourly_price: float
-
-@dataclass
-class GPUInstance:
-    instance_id: str
-    spec: GPUSpec
-    status: str  # "pending", "running", "stopping", "stopped"
-    created_at: datetime
-    started_at: Optional[datetime]
-    stopped_at: Optional[datetime]
-    total_cost: float
-
-@dataclass
-class TrainingJob:
-    job_id: str
-    instance_id: str
-    docker_image: str
-    command: str
-    environment: Dict[str, str]
-    status: str  # "queued", "running", "completed", "failed"
-    progress: float  # 0.0 to 1.0
-    logs_url: str
-    artifacts_url: Optional[str]
-```
-
-### 5.3 主要メソッド
-
-```python
-class SaladCloudClient:
-    async def list_available_gpus(
-        self, 
-        min_vram: int = 8,
-        max_price: float = 0.20
-    ) -> List[GPUSpec]:
-        """利用可能なGPUをリスト"""
-        
-    async def create_instance(
-        self, 
-        spec: GPUSpec,
-        container_image: str
-    ) -> GPUInstance:
-        """GPUインスタンスを作成"""
-        
-    async def start_training_job(
-        self, 
-        instance: GPUInstance,
-        job_config: TrainingJob
-    ) -> TrainingJob:
-        """学習ジョブを開始"""
-        
-    async def monitor_job(
-        self, 
-        job_id: str
-    ) -> TrainingJob:
-        """ジョブの進捗を監視"""
-        
-    async def terminate_instance(
-        self, 
-        instance_id: str
-    ) -> bool:
-        """インスタンスを終了"""
-```
-
-## 6. 通知API統合
-
-### 6.1 Slack統合
-
-```python
-@dataclass
-class SlackConfig:
-    bot_token: str
-    channel_id: str
-    base_url: str = "https://slack.com/api"
-    timeout: float = 30.0
-    rate_limit: int = 50  # per minute
-
-@dataclass
-class DecisionOption:
-    id: str
-    title: str
-    description: str
-    emoji: str
-    consequences: List[str]
-
-class SlackClient:
-    async def send_decision_request(
-        self, 
-        context: str,
-        options: List[DecisionOption],
-        timeout_minutes: int = 30
-    ) -> str:
-        """判断要求を送信"""
-        
-    async def wait_for_reaction(
-        self, 
-        message_id: str,
-        timeout_seconds: int = 1800
-    ) -> Optional[str]:
-        """リアクション待ち"""
-```
-
-## 7. 共通設計原則
-
-### 7.1 エラーハンドリング
-
-```python
-class APIException(Exception):
-    def __init__(self, api_name: str, error_code: str, message: str):
-        self.api_name = api_name
-        self.error_code = error_code
-        self.message = message
-        super().__init__(f"{api_name}: {error_code} - {message}")
-
-class RateLimitExceeded(APIException):
-    def __init__(self, api_name: str, retry_after: int):
-        self.retry_after = retry_after
-        super().__init__(api_name, "RATE_LIMITED", f"Retry after {retry_after}s")
-
-async def with_retry(
-    func: callable,
-    max_attempts: int = 3,
-    backoff_multiplier: float = 2.0
-) -> Any:
-    """指数バックオフ付きリトライ"""
-    for attempt in range(max_attempts):
-        try:
-            return await func()
-        except RateLimitExceeded as e:
-            if attempt == max_attempts - 1:
-                raise
-            await asyncio.sleep(e.retry_after)
-        except Exception as e:
-            if attempt == max_attempts - 1:
-                raise
-            delay = backoff_multiplier ** attempt
-            await asyncio.sleep(delay)
-```
-
-### 7.2 レート制限管理
-
-```python
-class RateLimiter:
-    def __init__(self, max_calls: int, window: int):
-        self.max_calls = max_calls
-        self.window = window
-        self.calls: List[float] = []
-        self._lock = asyncio.Lock()
+    prompt: str
+    language: str = "python"
+    max_tokens: int = 4000
+    temperature: float = 0.1
     
-    async def acquire(self) -> bool:
-        async with self._lock:
-            now = time.time()
-            # 古い記録を削除
-            self.calls = [call for call in self.calls if now - call < self.window]
-            
-            if len(self.calls) >= self.max_calls:
-                return False
-            
-            self.calls.append(now)
-            return True
+@dataclass
+class CodeGenerationResponse:
+    generated_code: str
+    explanation: str
+    dependencies: List[str]
+    estimated_runtime: Optional[str]
+
+class ClaudeAPI:
+    async def generate_code(self, request: CodeGenerationRequest) -> CodeGenerationResponse:
+        """コード生成"""
+        pass
     
-    async def wait_for_capacity(self) -> None:
-        while not await self.acquire():
-            await asyncio.sleep(1)
+    async def analyze_code(self, code: str) -> CodeAnalysisResponse:
+        """コード解析・改善提案"""
+        pass
 ```
 
-## 8. 実装計画
+### 4. GPU Provider APIs
 
-### 8.1 開発フェーズ
+#### Salad Cloud API
+
+**目的**: GPU インスタンス管理
+
+```python
+@dataclass
+class GPUInstanceRequest:
+    instance_type: str  # "rtx4090", "a100", "h100"
+    region: str = "us-east-1"
+    max_price: float = 0.15  # $/hour
+    auto_terminate_hours: int = 24
+
+class SaladCloudAPI:
+    async def create_instance(self, request: GPUInstanceRequest) -> GPUInstance:
+        """GPU インスタンス作成"""
+        pass
+    
+    async def get_instance_status(self, instance_id: str) -> GPUInstanceStatus:
+        """インスタンス状況確認"""
+        pass
+    
+    async def terminate_instance(self, instance_id: str) -> bool:
+        """インスタンス終了"""
+        pass
+```
+
+#### Vast.ai API
+
+**目的**: 代替GPUプロバイダー
+
+```python
+class VastAIAPI:
+    async def search_offers(self, criteria: GPUSearchCriteria) -> List[GPUOffer]:
+        """利用可能GPU検索"""
+        pass
+    
+    async def rent_instance(self, offer_id: str) -> GPUInstance:
+        """GPUインスタンス借用"""
+        pass
+```
+
+### 5. Supabase API
+
+**目的**: データベース・ストレージ・リアルタイム機能
+
+#### 基本設定
+```yaml
+base_url: "${SUPABASE_URL}"
+authentication: "bearer_token"
+api_key: "${SUPABASE_ANON_KEY}"
+service_role_key: "${SUPABASE_SERVICE_ROLE_KEY}"
+```
+
+#### エンドポイント設計
+
+```python
+class SupabaseAPI:
+    async def insert_data(self, table: str, data: Dict) -> Dict:
+        """データ挿入"""
+        pass
+    
+    async def update_data(self, table: str, id: str, data: Dict) -> Dict:
+        """データ更新"""
+        pass
+    
+    async def subscribe_changes(self, table: str, callback: Callable) -> None:
+        """リアルタイム変更監視"""
+        pass
+    
+    async def upload_file(self, bucket: str, path: str, file: bytes) -> str:
+        """ファイルアップロード"""
+        pass
+```
+
+## 統合APIクライアント設計
+
+### 1. APIクライアントファクトリー
+
+```python
+class APIClientFactory:
+    """統一APIクライアント管理"""
+    
+    def __init__(self):
+        self.clients: Dict[str, Any] = {}
+        self.rate_limit_manager = RateLimitManager()
+        self.auth_manager = AuthenticationManager()
+        self.error_handler = ErrorHandler()
+    
+    def get_client(self, api_name: str) -> Any:
+        """API別クライアント取得"""
+        if api_name not in self.clients:
+            self.clients[api_name] = self._create_client(api_name)
+        return self.clients[api_name]
+    
+    def _create_client(self, api_name: str) -> Any:
+        """API別クライアント作成"""
+        pass
+```
+
+### 2. 統一レスポンス形式
+
+```python
+@dataclass
+class APIResponse:
+    success: bool
+    data: Optional[Any] = None
+    error: Optional[str] = None
+    status_code: Optional[int] = None
+    headers: Optional[Dict] = None
+    execution_time_ms: Optional[int] = None
+    from_cache: bool = False
+```
+
+### 3. キャッシュ戦略
+
+```python
+class CacheManager:
+    """Redis ベース統一キャッシュ"""
+    
+    def __init__(self):
+        self.redis_client = redis.Redis()
+        self.default_ttl = 3600  # 1 hour
+    
+    async def get(self, key: str) -> Optional[Any]:
+        """キャッシュ取得"""
+        pass
+    
+    async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
+        """キャッシュ設定"""
+        pass
+    
+    def cache_key(self, api_name: str, endpoint: str, params: Dict) -> str:
+        """キャッシュキー生成"""
+        param_hash = hashlib.md5(json.dumps(params, sort_keys=True).encode()).hexdigest()
+        return f"{api_name}:{endpoint}:{param_hash}"
+```
+
+## モニタリング & 監視
+
+### 1. メトリクス収集
+
+```python
+@dataclass
+class APIMetrics:
+    api_name: str
+    endpoint: str
+    method: str
+    response_time_ms: int
+    status_code: int
+    success: bool
+    error_type: Optional[str] = None
+    timestamp: datetime = field(default_factory=datetime.now)
+
+class MetricsCollector:
+    async def record_api_call(self, metrics: APIMetrics) -> None:
+        """API呼び出しメトリクス記録"""
+        pass
+    
+    async def get_api_health(self, api_name: str) -> APIHealthStatus:
+        """API健全性レポート"""
+        pass
+```
+
+### 2. アラート設定
+
+```python
+class AlertManager:
+    """API監視アラート"""
+    
+    ALERT_CONDITIONS = [
+        "consecutive_failures >= 3",
+        "response_time_ms > 10000",
+        "error_rate > 0.1",  # 10%
+        "rate_limit_exceeded"
+    ]
+    
+    async def check_alerts(self) -> List[Alert]:
+        """アラート条件チェック"""
+        pass
+```
+
+## セキュリティ考慮事項
+
+### 1. 認証情報管理
+
+- **HashiCorp Vault**: 認証情報の暗号化保存
+- **自動ローテーション**: 30日サイクル
+- **アクセスログ**: 全認証情報アクセスを記録
+
+### 2. ネットワークセキュリティ
+
+```python
+class SecurityMiddleware:
+    """API セキュリティミドルウェア"""
+    
+    def __init__(self):
+        self.allowed_domains = [
+            "kaggle.com",
+            "googleapis.com", 
+            "anthropic.com",
+            "supabase.com"
+        ]
+        self.request_timeout = 60
+        self.max_payload_size = "10MB"
+    
+    async def validate_request(self, url: str, payload: bytes) -> bool:
+        """リクエスト検証"""
+        pass
+```
+
+### 3. レート制限回避策
+
+```python
+class RateLimitMitigation:
+    """レート制限対策"""
+    
+    async def distribute_requests(self, requests: List[APIRequest]) -> None:
+        """リクエスト分散実行"""
+        pass
+    
+    async def priority_queue(self, requests: List[APIRequest]) -> List[APIRequest]:
+        """優先度ベース実行順序決定"""
+        pass
+```
+
+## テスト戦略
+
+### 1. 単体テスト
+
+```python
+class TestKaggleAPI:
+    @pytest.fixture
+    def mock_kaggle_response(self):
+        """Kaggle API モックレスポンス"""
+        pass
+    
+    async def test_competition_list(self, mock_kaggle_response):
+        """コンペティション一覧テスト"""
+        pass
+```
+
+### 2. 統合テスト
+
+```python
+class TestAPIIntegration:
+    async def test_full_workflow(self):
+        """完全ワークフローテスト"""
+        # 1. コンペティション発見
+        # 2. 深層リサーチ実行
+        # 3. コード生成
+        # 4. GPU でトレーニング
+        # 5. 結果提出
+        pass
+```
+
+### 3. 負荷テスト
+
+```python
+class LoadTestRunner:
+    async def test_concurrent_requests(self, num_requests: int = 100):
+        """並行リクエスト負荷テスト"""
+        pass
+    
+    async def test_rate_limit_handling(self):
+        """レート制限処理テスト"""
+        pass
+```
+
+## パフォーマンス最適化
+
+### 1. 接続プール
+
+```python
+class ConnectionPoolManager:
+    """HTTP接続プール管理"""
+    
+    def __init__(self):
+        self.pools = {}
+        self.max_connections_per_host = 10
+        self.max_total_connections = 100
+    
+    def get_pool(self, api_name: str) -> aiohttp.ClientSession:
+        """API別接続プール取得"""
+        pass
+```
+
+### 2. 並列処理
+
+```python
+class ParallelAPIExecutor:
+    """並列API実行"""
+    
+    async def execute_batch(self, requests: List[APIRequest]) -> List[APIResponse]:
+        """バッチ実行"""
+        pass
+    
+    async def execute_pipeline(self, pipeline: List[APIRequest]) -> APIResponse:
+        """パイプライン実行"""
+        pass
+```
+
+## 運用 & 保守
+
+### 1. ログ設定
+
+```python
+import structlog
+
+logger = structlog.get_logger()
+
+class APILogger:
+    async def log_request(self, request: APIRequest) -> None:
+        logger.info("api_request", 
+                   api_name=request.api_name,
+                   endpoint=request.endpoint,
+                   method=request.method)
+    
+    async def log_response(self, response: APIResponse) -> None:
+        logger.info("api_response",
+                   success=response.success,
+                   status_code=response.status_code,
+                   execution_time_ms=response.execution_time_ms)
+```
+
+### 2. 設定管理
 
 ```yaml
-phase_1_foundation:
-  duration: "1週間"
-  deliverables:
-    - "共通APIクライアント基盤"
-    - "エラーハンドリング・リトライ機構"
-    - "レート制限管理"
-    - "基本的なユニットテスト"
-
-phase_2_core_apis:
-  duration: "2週間"
-  deliverables:
-    - "Kaggle API統合完了"
-    - "Claude Code API統合完了"
-    - "基本的な統合テスト"
-
-phase_3_advanced_apis:
-  duration: "2週間"
-  deliverables:
-    - "Deep Research API統合完了"
-    - "SaladCloud API統合完了"
-    - "通知API統合完了"
-
-phase_4_optimization:
-  duration: "1週間"
-  deliverables:
-    - "パフォーマンス最適化"
-    - "エラー処理の改善"
-    - "包括的なテストスイート"
+# config/api_config.yaml
+apis:
+  kaggle:
+    enabled: true
+    timeout: 60
+    retry_attempts: 3
+    cache_ttl: 3600
+    
+  google_agentspace:
+    enabled: true
+    timeout: 120
+    retry_attempts: 2
+    cache_ttl: 1800
+    
+  claude:
+    enabled: true
+    timeout: 30
+    retry_attempts: 3
+    cache_ttl: 0  # No cache for code generation
 ```
 
-### 8.2 次のステップ
+### 3. バージョン管理
 
-1. **データベーススキーマ設計** - API データの永続化
-2. **設定管理システム設計** - API 認証情報の管理
-3. **モニタリング設計** - API パフォーマンスの監視
+```python
+class APIVersionManager:
+    """API バージョン管理"""
+    
+    SUPPORTED_VERSIONS = {
+        "kaggle": ["v1"],
+        "google_agentspace": ["v1alpha"],
+        "claude": ["2024-06-01"],
+        "supabase": ["v1"]
+    }
+    
+    async def check_version_compatibility(self, api_name: str, version: str) -> bool:
+        """バージョン互換性チェック"""
+        pass
+```
 
----
+## 拡張性設計
 
-外部API統合設計が完了しました。次はどの部分を詳細化しますか？ 
+### 1. 新API追加フレームワーク
+
+```python
+class BaseAPIClient:
+    """新API追加用ベースクラス"""
+    
+    def __init__(self, api_name: str, config: APIConfig):
+        self.api_name = api_name
+        self.config = config
+        self.rate_limiter = RateLimitManager()
+        self.auth_manager = AuthenticationManager()
+    
+    async def make_request(self, endpoint: str, **kwargs) -> APIResponse:
+        """統一リクエスト実行"""
+        pass
+```
+
+### 2. プラグインシステム
+
+```python
+class APIPlugin:
+    """API プラグインインターフェース"""
+    
+    @abstractmethod
+    async def initialize(self) -> None:
+        pass
+    
+    @abstractmethod
+    async def call(self, request: APIRequest) -> APIResponse:
+        pass
+    
+    @abstractmethod
+    async def cleanup(self) -> None:
+        pass
+```
+
+この設計により、5つの外部APIを統一的に管理し、高い可用性、パフォーマンス、セキュリティを提供するAPIレイヤーを構築できます。 

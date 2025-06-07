@@ -1,0 +1,523 @@
+# Kaggle Agent Architecture Specification
+# Version: 0.1
+# Date: 2025-06-05
+
+kaggle_agent:
+  metadata:
+    version: "0.1"
+    created_date: "2025-06-05"
+    architecture_type: "monolithic_modular"
+    data_flow_type: "hybrid_pull_push"
+    target_budget: 0.15  # USD per hour
+    target_timeline: 24  # hours for first submission
+  
+  layers:
+    application:
+      description: "ビジネスロジックを担当する6つのモジュール"
+      modules:
+        competition_discovery:
+          name: "Competition Discovery Module"
+          responsibility: "コンペ発見・データ取得"
+          data_flows:
+            - type: "pull"
+              schedule: "hourly"
+              description: "新コンペ発見"
+            - type: "push"
+              trigger: "manual_selection"
+              description: "手動コンペ指定"
+          external_apis:
+            - "kaggle_api"
+          main_classes:
+            - "CompetitionDiscovery"
+          key_methods:
+            - "discover_competitions"
+            - "get_competition_metadata"
+            - "download_dataset"
+            - "validate_competition_eligibility"
+        
+        research_module:
+          name: "Research Module"
+          responsibility: "手法調査・アイデア創出"
+          data_flows:
+            - type: "push"
+              trigger: "new_competition_found"
+              description: "新コンペ発見時の自動調査"
+            - type: "pull"
+              schedule: "daily"
+              description: "既存コンペの追加調査"
+          external_apis:
+            - "deep_research_api"
+          main_classes:
+            - "ResearchModule"
+          key_methods:
+            - "generate_research_queries"
+            - "execute_deep_research"
+            - "rank_approaches"
+            - "synthesize_requirements"
+        
+        code_generation:
+          name: "Code Generation Module"
+          responsibility: "実装コード生成"
+          data_flows:
+            - type: "push"
+              trigger: "research_completed"
+              description: "調査完了時のコード生成"
+            - type: "pull"
+              schedule: "on_demand"
+              description: "コード改善・リファクタリング"
+          external_apis:
+            - "claude_code_api"
+          main_classes:
+            - "CodeGenerationModule"
+          key_methods:
+            - "generate_baseline_code"
+            - "generate_training_script"
+            - "optimize_hyperparameters"
+            - "create_docker_image"
+        
+        gpu_management:
+          name: "GPU Management Module"
+          responsibility: "GPU リソース管理・学習実行"
+          data_flows:
+            - type: "push"
+              trigger: "code_ready"
+              description: "コード準備完了時の学習開始"
+            - type: "pull"
+              schedule: "5min"
+              description: "コスト・リソース監視"
+          external_apis:
+            - "saladcloud_api"
+          main_classes:
+            - "GPUManager"
+          key_methods:
+            - "select_optimal_gpu"
+            - "provision_instance"
+            - "execute_training_job"
+            - "monitor_costs"
+            - "terminate_instance"
+        
+        submit_module:
+          name: "Submit Module"
+          responsibility: "提出・スコア取得"
+          data_flows:
+            - type: "push"
+              trigger: "training_completed"
+              description: "学習完了時の自動提出"
+            - type: "pull"
+              schedule: "15min"
+              description: "スコア定期チェック"
+          external_apis:
+            - "kaggle_api"
+          main_classes:
+            - "SubmitModule"
+          key_methods:
+            - "prepare_submission"
+            - "submit_to_kaggle"
+            - "get_leaderboard_score"
+            - "analyze_score_change"
+        
+        human_loop:
+          name: "Human Loop Module"
+          responsibility: "人間判断・通知"
+          data_flows:
+            - type: "push"
+              trigger: "decision_required"
+              description: "判断要求時の通知"
+            - type: "pull"
+              schedule: "1min"
+              description: "タイムアウト監視"
+          external_apis:
+            - "slack_api"
+            - "discord_api"
+          main_classes:
+            - "HumanLoopModule"
+          key_methods:
+            - "detect_decision_point"
+            - "create_decision_options"
+            - "send_notification"
+            - "wait_for_human_response"
+            - "apply_decision"
+    
+    infrastructure:
+      description: "システム基盤を支える6つのコンポーネント"
+      components:
+        workflow_engine:
+          name: "Workflow Engine"
+          technology: "prefect"
+          responsibility: "タスクDAG管理・実行"
+          configuration:
+            version: "3.x"
+            deployment_mode: "server"
+            task_retry_limit: 3
+            task_timeout: "30m"
+        
+        event_bus:
+          name: "Event Bus"
+          technology: "redis"
+          responsibility: "モジュール間イベント通信"
+          configuration:
+            version: "7.x"
+            persistence: "enabled"
+            cluster_mode: "single_node"
+            max_memory: "1GB"
+        
+        state_manager:
+          name: "State Manager"
+          technology: "postgresql"
+          responsibility: "永続化状態管理"
+          configuration:
+            version: "15.x"
+            max_connections: 100
+            shared_buffers: "256MB"
+            backup_schedule: "daily"
+        
+        object_store:
+          name: "Object Store"
+          technology: "minio"
+          responsibility: "データセット・成果物保存"
+          configuration:
+            s3_compatible: true
+            versioning: "enabled"
+            lifecycle_policy: "30_days"
+            encryption: "AES256"
+        
+        config_management:
+          name: "Config Management"
+          technology: "vault"
+          responsibility: "設定・シークレット管理"
+          configuration:
+            version: "1.15.x"
+            auth_method: "kubernetes"
+            secret_engine: "kv-v2"
+            lease_duration: "1h"
+        
+        monitoring:
+          name: "Monitoring"
+          technology: ["wandb", "prometheus"]
+          responsibility: "メトリクス・ログ管理"
+          configuration:
+            wandb:
+              project_name: "kaggle-agent"
+              log_level: "INFO"
+            prometheus:
+              scrape_interval: "15s"
+              retention: "15d"
+
+  external_apis:
+    kaggle_api:
+      purpose: "コンペティション・データ・提出管理"
+      rate_limit: "200/hour"
+      authentication: "api_token"
+      endpoints:
+        - "competitions/list"
+        - "competitions/{id}/data/download"
+        - "competitions/{id}/submissions"
+    
+    deep_research_api:
+      purpose: "手法調査・文献検索"
+      rate_limit: "100/hour"
+      authentication: "api_key"
+      endpoints:
+        - "research/query"
+        - "research/results"
+    
+    claude_code_api:
+      purpose: "コード生成・レビュー"
+      rate_limit: "1000/hour"
+      authentication: "api_key"
+      endpoints:
+        - "code/generate"
+        - "code/review"
+    
+    saladcloud_api:
+      purpose: "GPU リソース管理"
+      rate_limit: "500/hour"
+      authentication: "bearer_token"
+      endpoints:
+        - "containers/create"
+        - "containers/start"
+        - "containers/stop"
+    
+    slack_api:
+      purpose: "通知・ヒューマンループ"
+      rate_limit: "50/min"
+      authentication: "bot_token"
+      endpoints:
+        - "chat.postMessage"
+        - "reactions.get"
+    
+    discord_api:
+      purpose: "通知・ヒューマンループ"
+      rate_limit: "50/sec"
+      authentication: "bot_token"
+      endpoints:
+        - "channels/{id}/messages"
+        - "interactions/{id}/callback"
+
+  data_flows:
+    pull_based:
+      competition_discovery:
+        source: "scheduler"
+        interval: "1h"
+        description: "新コンペ発見"
+        priority: "normal"
+      
+      gpu_cost_monitoring:
+        source: "scheduler"
+        interval: "5m"
+        description: "コスト監視"
+        priority: "high"
+      
+      score_checking:
+        source: "scheduler"
+        interval: "15m"
+        description: "スコアチェック"
+        priority: "normal"
+      
+      timeout_monitoring:
+        source: "scheduler"
+        interval: "1m"
+        description: "タイムアウト監視"
+        priority: "high"
+    
+    push_based:
+      new_competition:
+        source: "competition_discovery"
+        target: "research_module"
+        event: "new_competition_found"
+        payload: "competition_metadata"
+      
+      research_completed:
+        source: "research_module"
+        target: "code_generation"
+        event: "research_completed"
+        payload: "research_results"
+      
+      code_ready:
+        source: "code_generation"
+        target: "gpu_management"
+        event: "code_ready"
+        payload: "code_bundle"
+      
+      training_completed:
+        source: "gpu_management"
+        target: "submit_module"
+        event: "training_completed"
+        payload: "model_artifacts"
+      
+      decision_required:
+        source: "*"
+        target: "human_loop"
+        event: "decision_required"
+        payload: "decision_context"
+
+  state_management:
+    workflow_states:
+      - name: "idle"
+        description: "待機状態"
+        transitions_to: ["discovering_competitions"]
+      
+      - name: "discovering_competitions"
+        description: "コンペ発見中"
+        transitions_to: ["researching_approaches", "idle", "error_recovery"]
+      
+      - name: "researching_approaches"
+        description: "手法調査中"
+        transitions_to: ["generating_code", "waiting_human_decision", "error_recovery"]
+      
+      - name: "generating_code"
+        description: "コード生成中"
+        transitions_to: ["training_models", "waiting_human_decision", "error_recovery"]
+      
+      - name: "training_models"
+        description: "モデル学習中"
+        transitions_to: ["submitting_results", "waiting_human_decision", "error_recovery"]
+      
+      - name: "submitting_results"
+        description: "結果提出中"
+        transitions_to: ["idle", "researching_approaches", "error_recovery"]
+      
+      - name: "waiting_human_decision"
+        description: "人間判断待ち"
+        transitions_to: ["*", "error_recovery"]
+      
+      - name: "error_recovery"
+        description: "エラー復旧中"
+        transitions_to: ["*", "idle"]
+    
+    competition_states:
+      - name: "discovered"
+        description: "発見済み"
+        next: "research_completed"
+      
+      - name: "research_completed"
+        description: "調査完了"
+        next: "code_generated"
+      
+      - name: "code_generated"
+        description: "コード準備完了"
+        next: "training_in_progress"
+      
+      - name: "training_in_progress"
+        description: "学習実行中"
+        next: "training_completed"
+      
+      - name: "training_completed"
+        description: "学習完了"
+        next: "submitted"
+      
+      - name: "submitted"
+        description: "提出完了"
+        next: "completed"
+      
+      - name: "completed"
+        description: "コンペ完了"
+        next: null
+    
+    resource_states:
+      - name: "available"
+        description: "利用可能"
+        next: "provisioning"
+      
+      - name: "provisioning"
+        description: "プロビジョニング中"
+        next: ["running", "error"]
+      
+      - name: "running"
+        description: "実行中"
+        next: ["terminating", "error"]
+      
+      - name: "terminating"
+        description: "終了処理中"
+        next: ["available", "error"]
+      
+      - name: "error"
+        description: "エラー状態"
+        next: ["available", "terminating"]
+
+  error_handling:
+    error_types:
+      transient:
+        examples:
+          - "api_rate_limit"
+          - "network_timeout"
+          - "gpu_unavailable"
+          - "service_temporarily_unavailable"
+        strategy: "exponential_backoff_retry"
+        max_attempts: 3
+        backoff_multiplier: 2
+        backoff_max_delay: "300s"
+      
+      configuration:
+        examples:
+          - "invalid_api_token"
+          - "invalid_config_value"
+          - "permission_denied"
+          - "authentication_failed"
+        strategy: "human_intervention_required"
+        escalation: "immediate"
+        notification_channels: ["slack", "discord"]
+      
+      business_logic:
+        examples:
+          - "competition_ineligible"
+          - "budget_exceeded"
+          - "deadline_passed"
+          - "invalid_submission_format"
+        strategy: "skip_and_continue"
+        logging_level: "warning"
+        continue_workflow: true
+    
+    recovery_strategies:
+      exponential_backoff:
+        initial_delay: "1s"
+        multiplier: 2
+        max_delay: "300s"
+        jitter: true
+      
+      circuit_breaker:
+        failure_threshold: 5
+        timeout: "60s"
+        half_open_max_calls: 3
+      
+      bulkhead:
+        max_concurrent_calls: 10
+        max_wait_duration: "30s"
+
+  concurrency:
+    parallel_tasks:
+      multiple_competition_research:
+        max_concurrent: 3
+        resource_requirement: "cpu_bound"
+      
+      multiple_approach_implementation:
+        max_concurrent: 2
+        resource_requirement: "memory_bound"
+      
+      parallel_gpu_management:
+        max_concurrent: 2
+        resource_requirement: "gpu_bound"
+      
+      concurrent_notifications:
+        max_concurrent: 5
+        resource_requirement: "io_bound"
+    
+    resource_limits:
+      saladcloud_api:
+        type: "rate_limited"
+        semaphore: 5
+        window: "1m"
+      
+      kaggle_api:
+        type: "rate_limited"
+        semaphore: 3
+        window: "1h"
+      
+      gpu_instances:
+        type: "cost_constrained"
+        semaphore: 2
+        max_cost_per_hour: 0.30
+      
+      database_connections:
+        type: "connection_limited"
+        semaphore: 10
+        timeout: "30s"
+
+  performance_targets:
+    first_submission: "24h"
+    iteration_cycle: "8h"
+    api_response_time: "5s"
+    database_query_time: "1s"
+    notification_delivery: "30s"
+    
+  cost_constraints:
+    gpu_hourly_budget: 0.15  # USD
+    storage_monthly_budget: 0.01  # USD per GB
+    api_calls_budget: 10.0  # USD per month
+    total_monthly_budget: 100.0  # USD
+
+  monitoring_metrics:
+    business_metrics:
+      - "competitions_discovered_per_day"
+      - "successful_submissions_per_week"
+      - "average_leaderboard_score_improvement"
+      - "cost_per_submission"
+    
+    technical_metrics:
+      - "api_response_time_95th_percentile"
+      - "workflow_success_rate"
+      - "error_rate_by_type"
+      - "resource_utilization"
+    
+    alerts:
+      - metric: "cost_per_hour"
+        threshold: 0.20
+        severity: "critical"
+      
+      - metric: "workflow_failure_rate"
+        threshold: 0.10
+        severity: "warning"
+      
+      - metric: "api_error_rate"
+        threshold: 0.05
+        severity: "warning" 

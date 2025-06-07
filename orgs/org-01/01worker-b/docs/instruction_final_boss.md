@@ -248,173 +248,113 @@
 
 ## 🔄 マージ・バックアップ戦略
 
-### ファイル保護方針
+### タスク指示書管理方針
 ```yaml
-マージ時バックアップ戦略:
-  基本方針:
-    - 対象ファイル自動バックアップ: マージ前に既存ファイルを保護
-    - バージョン管理: タイムスタンプ付きファイル名で履歴保持
-    - 復旧可能性: いつでも以前のバージョンに復元可能
-    - 透明性: バックアップ作成の明示的ログ記録
+タスク指示書の管理:
+  実装指示書の配置:
+    - 具体的タスク指示: worker_instructions.md (各worktree)
+    - Boss評価・統合指示: boss_instructions.md (各worktree)
+    - プロジェクト全体管理: instruction_final_boss.md (main)
 
-  バックアップディレクトリ構造:
+  マージ時の保護:
+    - worker_instructions.md: マージ対象外（old_promptsディレクトリに保存）
+    - boss_instructions.md: マージ対象外（old_promptsディレクトリに保存）
+    - 実装ファイルのみ: 通常のマージ・統合処理対象
+
+  バックアップ方針:
     old_prompts/
-    ├── YYYY-MM-DD_HH-MM-SS/          # タイムスタンプディレクトリ
-    │   ├── org-01/                    # 組織別バックアップ
-    │   │   ├── 01boss/                # Boss worktree実装
-    │   │   │   ├── boss_instructions/ # Boss指示・実装内容
-    │   │   │   └── implementations/   # Boss実装ファイル群
-    │   │   ├── 01worker-a/            # Worker-A worktree実装
-    │   │   ├── 01worker-b/            # Worker-B worktree実装
-    │   │   └── 01worker-c/            # Worker-C worktree実装
-    │   ├── org-02/                    # 他組織同様構造
-    │   ├── shared_main/               # 共通ファイル
-    │   └── docs/                      # 共通instructionファイル
-    └── backup_manifest.json          # バックアップメタデータ
+    ├── worker_instructions_YYYY-MM-DD_HH-MM-SS_org-XX.md
+    ├── boss_instructions_YYYY-MM-DD_HH-MM-SS_org-XX.md
+    ├── worker_instructions_YYYY-MM-DD_HH-MM-SS_org-YY.md
+    ├── boss_instructions_YYYY-MM-DD_HH-MM-SS_org-YY.md
+    └── ... (他の組織・時期)
+
+ファイル命名規則:
+  - worker_instructions_{timestamp}_{organization}.md
+  - boss_instructions_{timestamp}_{organization}.md
+  - {timestamp}: YYYY-MM-DD_HH-MM-SS形式
+  - {organization}: org-01, org-02, org-03, org-04
 
 実行プロセス:
-  1. マージ対象ファイル特定
-  2. old_prompts/{timestamp}ディレクトリ作成
-  3. 既存ファイルのコピー・リネーム
-  4. バックアップマニフェスト更新
-  5. 新実装のマージ実行
-  6. マージ結果検証
-  7. ロールバック可能性確保
+  1. マージ開始前に指示書をold_promptsにバックアップ
+  2. ファイル名にタイムスタンプと組織名を付与
+  3. 実装ファイルのみマージ実行
+  4. 指示書は各worktreeで個別管理継続
+  5. 履歴確認は old_promptsディレクトリで実施
 ```
 
-### 自動バックアップスクリプト
-```python
-# shared_main/backup_manager.py
+### 簡単バックアップスクリプト
+```bash
+#!/bin/bash
+# scripts/backup_instructions.sh
 
-import os
-import shutil
-import json
-from datetime import datetime
-from pathlib import Path
-from typing import List, Dict
+# 指示書バックアップスクリプト
 
-class MergeBackupManager:
-    """マージ時ファイルバックアップ管理"""
+TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
+OLD_PROMPTS_DIR="old_prompts"
+
+# old_promptsディレクトリ作成
+mkdir -p "$OLD_PROMPTS_DIR"
+
+backup_instruction_file() {
+    local org_name=$1
+    local file_type=$2  # "worker_instructions" or "boss_instructions"
+    local source_file="orgs/${org_name}/01boss/${file_type}.md"
     
-    def __init__(self, base_path: str = "."):
-        self.base_path = Path(base_path)
-        self.backup_root = self.base_path / "old_prompts"
-        self.backup_root.mkdir(exist_ok=True)
-    
-    def create_backup(self, target_files: List[str], org_name: str = None) -> str:
-        """
-        マージ前バックアップ作成
-        
-        Args:
-            target_files: バックアップ対象ファイルリスト
-            org_name: 組織名（オプション）
-            
-        Returns:
-            バックアップディレクトリパス
-        """
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        backup_dir = self.backup_root / timestamp
-        backup_dir.mkdir(exist_ok=True)
-        
-        # 組織別ディレクトリ作成
-        if org_name:
-            org_backup_dir = backup_dir / org_name
-            org_backup_dir.mkdir(exist_ok=True)
-        
-        backup_manifest = {
-            "timestamp": timestamp,
-            "organization": org_name,
-            "backed_up_files": [],
-            "backup_reason": "pre_merge_backup"
-        }
-        
-        # ファイルバックアップ実行
-        for file_path in target_files:
-            if os.path.exists(file_path):
-                source_path = Path(file_path)
-                
-                if org_name:
-                    dest_path = org_backup_dir / source_path.name
-                else:
-                    dest_path = backup_dir / source_path.name
-                
-                shutil.copy2(source_path, dest_path)
-                
-                backup_manifest["backed_up_files"].append({
-                    "original_path": str(source_path),
-                    "backup_path": str(dest_path),
-                    "file_size": os.path.getsize(source_path),
-                    "modification_time": os.path.getmtime(source_path)
-                })
-        
-        # マニフェスト保存
-        manifest_path = backup_dir / "backup_manifest.json"
-        with open(manifest_path, 'w', encoding='utf-8') as f:
-            json.dump(backup_manifest, f, indent=2, ensure_ascii=False)
-        
-        return str(backup_dir)
-    
-    def restore_from_backup(self, backup_timestamp: str, target_files: List[str] = None):
-        """バックアップからの復元"""
-        backup_dir = self.backup_root / backup_timestamp
-        
-        if not backup_dir.exists():
-            raise FileNotFoundError(f"Backup directory not found: {backup_dir}")
-        
-        manifest_path = backup_dir / "backup_manifest.json"
-        with open(manifest_path, 'r', encoding='utf-8') as f:
-            manifest = json.load(f)
-        
-        # 指定ファイルまたは全ファイル復元
-        files_to_restore = target_files or [
-            item["original_path"] for item in manifest["backed_up_files"]
-        ]
-        
-        for file_info in manifest["backed_up_files"]:
-            if file_info["original_path"] in files_to_restore:
-                backup_path = Path(file_info["backup_path"])
-                original_path = Path(file_info["original_path"])
-                
-                # 復元実行
-                shutil.copy2(backup_path, original_path)
-                print(f"Restored: {original_path}")
+    if [ -f "$source_file" ]; then
+        local backup_name="${file_type}_${TIMESTAMP}_${org_name}.md"
+        cp "$source_file" "$OLD_PROMPTS_DIR/$backup_name"
+        echo "✅ Backed up: $source_file → old_prompts/$backup_name"
+    else
+        echo "⚠️  File not found: $source_file"
+    fi
+}
+
+# 使用例:
+# ./scripts/backup_instructions.sh org-01
+# ./scripts/backup_instructions.sh all
+
+if [ "$1" = "all" ]; then
+    for org in org-01 org-02 org-03 org-04; do
+        echo "📂 Backing up instructions for $org..."
+        backup_instruction_file "$org" "worker_instructions"
+        backup_instruction_file "$org" "boss_instructions"
+    done
+else
+    org_name=${1:-"org-01"}
+    echo "📂 Backing up instructions for $org_name..."
+    backup_instruction_file "$org_name" "worker_instructions"
+    backup_instruction_file "$org_name" "boss_instructions"
+fi
+
+echo "🎯 Backup completed at: $(date)"
+echo "📁 Backup location: $OLD_PROMPTS_DIR/"
 ```
 
-### マージ実行プロトコル
+### シンプルマージ手順
 ```yaml
 統合マージ手順:
-  Pre-Merge Phase:
-    1. 対象ファイルリスト生成
-    2. バックアップディレクトリ作成
-    3. 既存実装バックアップ実行
-    4. バックアップ整合性確認
-    5. マージ可能性事前検証
+  Pre-Merge:
+    1. 指示書バックアップ実行: ./scripts/backup_instructions.sh org-XX
+    2. Boss選定済み最優秀実装確認
+    3. 実装ファイルのみマージ準備
 
   Merge Execution:
-    6. Boss選定済み最優秀実装取得
-    7. 段階的マージ実行（コア→UI→テスト）
-    8. 各段階での動作確認
-    9. 統合テスト実行
-    10. 品質ゲート通過確認
+    4. git merge実行（実装ファイルのみ）
+    5. 基本動作確認
+    6. テスト実行
+    7. マージ完了
 
-  Post-Merge Validation:
-    11. 全機能動作確認
-    12. パフォーマンス回帰テスト
-    13. セキュリティ検証
-    14. ドキュメント更新確認
-    15. マージ完了レポート生成
+  特記事項:
+    - worker_instructions.md: マージしない（各worktreeで個別管理）
+    - boss_instructions.md: マージしない（各worktreeで個別管理）
+    - 実装コード・テスト・ドキュメント: 通常通りマージ
+    - 指示書の履歴: old_promptsディレクトリで管理
 
-  Rollback Capability:
-    - 任意時点での迅速ロールバック
-    - 部分的ファイル復元
-    - 設定のみ復元
-    - 完全状態復元
-
-安全性保証:
-  - 自動バックアップ: 100%実行保証
-  - 復元テスト: 週次実行
-  - バックアップ検証: 日次実行
-  - 災害復旧: 24時間以内復元
+簡単復元:
+  - 指示書復元: old_promptsディレクトリから手動コピー
+  - 実装復元: git revert / git reset使用
+  - ファイル名でバックアップ時期・組織特定可能
 ```
 
 ### 組織間連携管理

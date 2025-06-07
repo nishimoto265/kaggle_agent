@@ -1,0 +1,1039 @@
+# Kaggle Agent Database Schema Specification
+# Version: 1.0
+# Database: PostgreSQL (Supabase)
+
+schema_version: "1.0"
+database_type: "postgresql"
+platform: "supabase"
+
+# Core Tables Definition
+tables:
+  competitions:
+    description: "Kaggle コンペティション情報"
+    columns:
+      id:
+        type: "UUID"
+        primary_key: true
+        default: "gen_random_uuid()"
+        nullable: false
+      kaggle_id:
+        type: "VARCHAR(100)"
+        unique: true
+        nullable: false
+        description: "Kaggle API から取得する一意のコンペティションID"
+      title:
+        type: "VARCHAR(500)"
+        nullable: false
+        description: "コンペティションタイトル"
+      description:
+        type: "TEXT"
+        nullable: true
+        description: "コンペティション説明"
+      problem_type:
+        type: "VARCHAR(50)"
+        nullable: false
+        enum: ["tabular", "nlp", "cv", "time_series"]
+        description: "問題タイプ"
+      dataset_size_gb:
+        type: "DECIMAL(10,2)"
+        nullable: true
+        description: "データセットサイズ（GB）"
+      participant_count:
+        type: "INTEGER"
+        nullable: true
+        description: "参加者数"
+      prize_pool:
+        type: "DECIMAL(12,2)"
+        nullable: true
+        description: "賞金総額（USD）"
+      deadline:
+        type: "TIMESTAMPTZ"
+        nullable: false
+        description: "提出締切"
+      evaluation_metric:
+        type: "VARCHAR(100)"
+        nullable: true
+        description: "評価指標"
+      submission_format:
+        type: "TEXT"
+        nullable: true
+        description: "提出形式の説明"
+      data_availability:
+        type: "VARCHAR(50)"
+        nullable: true
+        enum: ["public", "private", "restricted"]
+        description: "データ利用可能性"
+      difficulty_score:
+        type: "DECIMAL(3,2)"
+        nullable: true
+        constraint: "CHECK (difficulty_score >= 0 AND difficulty_score <= 1)"
+        description: "難易度スコア（0.0-1.0）"
+      tags:
+        type: "TEXT[]"
+        nullable: true
+        description: "タグ配列"
+      external_data_allowed:
+        type: "BOOLEAN"
+        default: false
+        description: "外部データ使用可否"
+      team_limit:
+        type: "INTEGER"
+        nullable: true
+        description: "チーム人数制限"
+      daily_submission_limit:
+        type: "INTEGER"
+        nullable: true
+        description: "1日の提出回数制限"
+      discovery_source:
+        type: "VARCHAR(100)"
+        nullable: true
+        enum: ["kaggle_api", "manual", "recommendation"]
+        description: "発見ソース"
+      created_at:
+        type: "TIMESTAMPTZ"
+        default: "NOW()"
+        nullable: false
+      updated_at:
+        type: "TIMESTAMPTZ"
+        default: "NOW()"
+        nullable: false
+    indexes:
+      - name: "idx_competitions_kaggle_id"
+        columns: ["kaggle_id"]
+        unique: false
+      - name: "idx_competitions_deadline"
+        columns: ["deadline"]
+        unique: false
+      - name: "idx_competitions_problem_type"
+        columns: ["problem_type"]
+        unique: false
+      - name: "idx_competitions_discovery_source"
+        columns: ["discovery_source"]
+        unique: false
+
+  agent_executions:
+    description: "エージェント実行セッション"
+    columns:
+      id:
+        type: "UUID"
+        primary_key: true
+        default: "gen_random_uuid()"
+        nullable: false
+      competition_id:
+        type: "UUID"
+        nullable: false
+        foreign_key:
+          table: "competitions"
+          column: "id"
+          on_delete: "CASCADE"
+      execution_name:
+        type: "VARCHAR(200)"
+        nullable: false
+        description: "実行セッション名"
+      status:
+        type: "VARCHAR(50)"
+        nullable: false
+        default: "pending"
+        enum: ["pending", "data_acquisition", "research", "code_generation", "training", "human_review", "submission", "completed", "failed", "cancelled"]
+        description: "実行ステータス"
+      priority:
+        type: "INTEGER"
+        default: 0
+        description: "優先度（高いほど優先）"
+      gpu_budget_dollars:
+        type: "DECIMAL(8,2)"
+        default: 0.15
+        description: "GPU予算（USD）"
+      gpu_budget_consumed:
+        type: "DECIMAL(8,2)"
+        default: 0.0
+        description: "GPU予算消費額（USD）"
+      target_submission_hours:
+        type: "INTEGER"
+        default: 24
+        description: "目標提出時間"
+      current_step:
+        type: "INTEGER"
+        default: 1
+        constraint: "CHECK (current_step >= 1 AND current_step <= 10)"
+        description: "現在のワークフローステップ（1-10）"
+      error_message:
+        type: "TEXT"
+        nullable: true
+        description: "エラーメッセージ"
+      human_intervention_required:
+        type: "BOOLEAN"
+        default: false
+        description: "人的介入が必要か"
+      human_intervention_reason:
+        type: "TEXT"
+        nullable: true
+        description: "人的介入が必要な理由"
+      started_at:
+        type: "TIMESTAMPTZ"
+        nullable: true
+        description: "実行開始時刻"
+      completed_at:
+        type: "TIMESTAMPTZ"
+        nullable: true
+        description: "実行完了時刻"
+      created_at:
+        type: "TIMESTAMPTZ"
+        default: "NOW()"
+        nullable: false
+      updated_at:
+        type: "TIMESTAMPTZ"
+        default: "NOW()"
+        nullable: false
+    indexes:
+      - name: "idx_agent_executions_competition_id"
+        columns: ["competition_id"]
+        unique: false
+      - name: "idx_agent_executions_status"
+        columns: ["status"]
+        unique: false
+      - name: "idx_agent_executions_priority"
+        columns: ["priority"]
+        order: "DESC"
+        unique: false
+      - name: "idx_agent_executions_created_at"
+        columns: ["created_at"]
+        unique: false
+
+  research_results:
+    description: "調査結果データ"
+    columns:
+      id:
+        type: "UUID"
+        primary_key: true
+        default: "gen_random_uuid()"
+        nullable: false
+      execution_id:
+        type: "UUID"
+        nullable: false
+        foreign_key:
+          table: "agent_executions"
+          column: "id"
+          on_delete: "CASCADE"
+      research_type:
+        type: "VARCHAR(50)"
+        nullable: false
+        enum: ["academic_papers", "kaggle_solutions", "documentation", "code_examples"]
+        description: "調査タイプ"
+      query_text:
+        type: "TEXT"
+        nullable: false
+        description: "検索クエリ"
+      source_api:
+        type: "VARCHAR(50)"
+        nullable: false
+        enum: ["google_deep_research", "arxiv", "kaggle_api"]
+        description: "ソースAPI"
+      raw_response:
+        type: "JSONB"
+        nullable: false
+        description: "APIからの生レスポンス"
+      processed_insights:
+        type: "TEXT[]"
+        nullable: true
+        description: "処理済みインサイト配列"
+      relevance_score:
+        type: "DECIMAL(3,2)"
+        nullable: true
+        constraint: "CHECK (relevance_score >= 0 AND relevance_score <= 1)"
+        description: "関連性スコア（0.0-1.0）"
+      citation_count:
+        type: "INTEGER"
+        default: 0
+        description: "引用数"
+      research_duration_seconds:
+        type: "INTEGER"
+        nullable: true
+        description: "調査実行時間（秒）"
+      tokens_consumed:
+        type: "INTEGER"
+        nullable: true
+        description: "消費トークン数"
+      cost_dollars:
+        type: "DECIMAL(8,4)"
+        nullable: true
+        description: "コスト（USD）"
+      created_at:
+        type: "TIMESTAMPTZ"
+        default: "NOW()"
+        nullable: false
+    indexes:
+      - name: "idx_research_results_execution_id"
+        columns: ["execution_id"]
+        unique: false
+      - name: "idx_research_results_research_type"
+        columns: ["research_type"]
+        unique: false
+      - name: "idx_research_results_relevance_score"
+        columns: ["relevance_score"]
+        order: "DESC"
+        unique: false
+      - name: "idx_research_results_source_api"
+        columns: ["source_api"]
+        unique: false
+
+  generated_code:
+    description: "生成されたコードファイル"
+    columns:
+      id:
+        type: "UUID"
+        primary_key: true
+        default: "gen_random_uuid()"
+        nullable: false
+      execution_id:
+        type: "UUID"
+        nullable: false
+        foreign_key:
+          table: "agent_executions"
+          column: "id"
+          on_delete: "CASCADE"
+      code_type:
+        type: "VARCHAR(50)"
+        nullable: false
+        enum: ["eda", "preprocessing", "model", "training", "inference", "submission"]
+        description: "コードタイプ"
+      file_name:
+        type: "VARCHAR(200)"
+        nullable: false
+        description: "ファイル名"
+      file_path:
+        type: "VARCHAR(500)"
+        nullable: true
+        description: "ファイルパス"
+      code_content:
+        type: "TEXT"
+        nullable: false
+        description: "コード内容"
+      programming_language:
+        type: "VARCHAR(20)"
+        default: "python"
+        description: "プログラミング言語"
+      dependencies:
+        type: "TEXT[]"
+        nullable: true
+        description: "必要なパッケージ配列"
+      execution_order:
+        type: "INTEGER"
+        nullable: true
+        description: "パイプライン内での実行順序"
+      estimated_runtime_minutes:
+        type: "INTEGER"
+        nullable: true
+        description: "推定実行時間（分）"
+      memory_requirements_gb:
+        type: "DECIMAL(5,2)"
+        nullable: true
+        description: "メモリ要件（GB）"
+      gpu_required:
+        type: "BOOLEAN"
+        default: false
+        description: "GPU必須か"
+      validation_status:
+        type: "VARCHAR(50)"
+        default: "pending"
+        enum: ["pending", "valid", "invalid", "needs_review"]
+        description: "バリデーションステータス"
+      validation_errors:
+        type: "TEXT[]"
+        nullable: true
+        description: "バリデーションエラー配列"
+      human_approved:
+        type: "BOOLEAN"
+        default: false
+        description: "人間による承認済みか"
+      model_api_used:
+        type: "VARCHAR(50)"
+        nullable: true
+        enum: ["claude_code", "custom"]
+        description: "使用したモデルAPI"
+      tokens_consumed:
+        type: "INTEGER"
+        nullable: true
+        description: "消費トークン数"
+      cost_dollars:
+        type: "DECIMAL(8,4)"
+        nullable: true
+        description: "コスト（USD）"
+      created_at:
+        type: "TIMESTAMPTZ"
+        default: "NOW()"
+        nullable: false
+      updated_at:
+        type: "TIMESTAMPTZ"
+        default: "NOW()"
+        nullable: false
+    indexes:
+      - name: "idx_generated_code_execution_id"
+        columns: ["execution_id"]
+        unique: false
+      - name: "idx_generated_code_code_type"
+        columns: ["code_type"]
+        unique: false
+      - name: "idx_generated_code_execution_order"
+        columns: ["execution_order"]
+        unique: false
+      - name: "idx_generated_code_validation_status"
+        columns: ["validation_status"]
+        unique: false
+
+  gpu_sessions:
+    description: "GPU セッション管理"
+    columns:
+      id:
+        type: "UUID"
+        primary_key: true
+        default: "gen_random_uuid()"
+        nullable: false
+      execution_id:
+        type: "UUID"
+        nullable: false
+        foreign_key:
+          table: "agent_executions"
+          column: "id"
+          on_delete: "CASCADE"
+      provider:
+        type: "VARCHAR(50)"
+        nullable: false
+        enum: ["salad_cloud", "vast_ai", "lambda_labs"]
+        description: "GPUプロバイダー"
+      instance_id:
+        type: "VARCHAR(200)"
+        nullable: true
+        description: "プロバイダーのインスタンスID"
+      instance_type:
+        type: "VARCHAR(100)"
+        nullable: false
+        description: "インスタンスタイプ（例：RTX4090, A100）"
+      gpu_count:
+        type: "INTEGER"
+        default: 1
+        constraint: "CHECK (gpu_count > 0)"
+        description: "GPU数"
+      memory_gb:
+        type: "INTEGER"
+        nullable: true
+        description: "メモリ（GB）"
+      storage_gb:
+        type: "INTEGER"
+        nullable: true
+        description: "ストレージ（GB）"
+      hourly_rate_dollars:
+        type: "DECIMAL(6,4)"
+        nullable: true
+        description: "時間当たり料金（USD）"
+      region:
+        type: "VARCHAR(50)"
+        nullable: true
+        description: "リージョン"
+      status:
+        type: "VARCHAR(50)"
+        nullable: false
+        default: "provisioning"
+        enum: ["provisioning", "running", "idle", "terminated", "failed"]
+        description: "セッションステータス"
+      provisioned_at:
+        type: "TIMESTAMPTZ"
+        nullable: true
+        description: "プロビジョニング完了時刻"
+      terminated_at:
+        type: "TIMESTAMPTZ"
+        nullable: true
+        description: "終了時刻"
+      total_runtime_minutes:
+        type: "INTEGER"
+        default: 0
+        description: "総実行時間（分）"
+      total_cost_dollars:
+        type: "DECIMAL(8,4)"
+        default: 0.0
+        description: "総コスト（USD）"
+      cost_limit_dollars:
+        type: "DECIMAL(8,4)"
+        nullable: true
+        description: "コスト上限（USD）"
+      auto_terminate_at:
+        type: "TIMESTAMPTZ"
+        nullable: true
+        description: "自動終了時刻"
+      ssh_connection_info:
+        type: "JSONB"
+        nullable: true
+        description: "暗号化された接続情報"
+      error_message:
+        type: "TEXT"
+        nullable: true
+        description: "エラーメッセージ"
+      created_at:
+        type: "TIMESTAMPTZ"
+        default: "NOW()"
+        nullable: false
+      updated_at:
+        type: "TIMESTAMPTZ"
+        default: "NOW()"
+        nullable: false
+    indexes:
+      - name: "idx_gpu_sessions_execution_id"
+        columns: ["execution_id"]
+        unique: false
+      - name: "idx_gpu_sessions_provider"
+        columns: ["provider"]
+        unique: false
+      - name: "idx_gpu_sessions_status"
+        columns: ["status"]
+        unique: false
+      - name: "idx_gpu_sessions_auto_terminate_at"
+        columns: ["auto_terminate_at"]
+        unique: false
+
+  training_jobs:
+    description: "モデル訓練ジョブ"
+    columns:
+      id:
+        type: "UUID"
+        primary_key: true
+        default: "gen_random_uuid()"
+        nullable: false
+      execution_id:
+        type: "UUID"
+        nullable: false
+        foreign_key:
+          table: "agent_executions"
+          column: "id"
+          on_delete: "CASCADE"
+      gpu_session_id:
+        type: "UUID"
+        nullable: true
+        foreign_key:
+          table: "gpu_sessions"
+          column: "id"
+          on_delete: "SET NULL"
+      code_id:
+        type: "UUID"
+        nullable: false
+        foreign_key:
+          table: "generated_code"
+          column: "id"
+          on_delete: "CASCADE"
+      job_name:
+        type: "VARCHAR(200)"
+        nullable: false
+        description: "ジョブ名"
+      model_type:
+        type: "VARCHAR(100)"
+        nullable: true
+        enum: ["xgboost", "lightgbm", "neural_network", "transformer"]
+        description: "モデルタイプ"
+      hyperparameters:
+        type: "JSONB"
+        nullable: true
+        description: "ハイパーパラメータ"
+      dataset_split:
+        type: "JSONB"
+        nullable: true
+        description: "データセット分割設定"
+      status:
+        type: "VARCHAR(50)"
+        nullable: false
+        default: "queued"
+        enum: ["queued", "running", "completed", "failed", "cancelled"]
+        description: "ジョブステータス"
+      started_at:
+        type: "TIMESTAMPTZ"
+        nullable: true
+        description: "開始時刻"
+      completed_at:
+        type: "TIMESTAMPTZ"
+        nullable: true
+        description: "完了時刻"
+      runtime_minutes:
+        type: "INTEGER"
+        nullable: true
+        description: "実行時間（分）"
+      peak_memory_gb:
+        type: "DECIMAL(6,2)"
+        nullable: true
+        description: "ピークメモリ使用量（GB）"
+      gpu_utilization_percent:
+        type: "DECIMAL(5,2)"
+        nullable: true
+        constraint: "CHECK (gpu_utilization_percent >= 0 AND gpu_utilization_percent <= 100)"
+        description: "GPU使用率（%）"
+      best_validation_score:
+        type: "DECIMAL(10,6)"
+        nullable: true
+        description: "最良バリデーションスコア"
+      final_test_score:
+        type: "DECIMAL(10,6)"
+        nullable: true
+        description: "最終テストスコア"
+      model_artifacts_path:
+        type: "VARCHAR(500)"
+        nullable: true
+        description: "モデル成果物パス（S3/MinIO）"
+      logs_path:
+        type: "VARCHAR(500)"
+        nullable: true
+        description: "ログパス"
+      metrics:
+        type: "JSONB"
+        nullable: true
+        description: "訓練メトリクス履歴"
+      early_stopping_epoch:
+        type: "INTEGER"
+        nullable: true
+        description: "早期停止エポック"
+      total_epochs:
+        type: "INTEGER"
+        nullable: true
+        description: "総エポック数"
+      error_message:
+        type: "TEXT"
+        nullable: true
+        description: "エラーメッセージ"
+      created_at:
+        type: "TIMESTAMPTZ"
+        default: "NOW()"
+        nullable: false
+      updated_at:
+        type: "TIMESTAMPTZ"
+        default: "NOW()"
+        nullable: false
+    indexes:
+      - name: "idx_training_jobs_execution_id"
+        columns: ["execution_id"]
+        unique: false
+      - name: "idx_training_jobs_gpu_session_id"
+        columns: ["gpu_session_id"]
+        unique: false
+      - name: "idx_training_jobs_status"
+        columns: ["status"]
+        unique: false
+      - name: "idx_training_jobs_best_validation_score"
+        columns: ["best_validation_score"]
+        order: "DESC"
+        unique: false
+
+  submissions:
+    description: "Kaggle 提出記録"
+    columns:
+      id:
+        type: "UUID"
+        primary_key: true
+        default: "gen_random_uuid()"
+        nullable: false
+      execution_id:
+        type: "UUID"
+        nullable: false
+        foreign_key:
+          table: "agent_executions"
+          column: "id"
+          on_delete: "CASCADE"
+      training_job_id:
+        type: "UUID"
+        nullable: true
+        foreign_key:
+          table: "training_jobs"
+          column: "id"
+          on_delete: "SET NULL"
+      submission_file_path:
+        type: "VARCHAR(500)"
+        nullable: false
+        description: "提出ファイルパス"
+      description:
+        type: "TEXT"
+        nullable: true
+        description: "提出説明"
+      kaggle_submission_id:
+        type: "VARCHAR(100)"
+        nullable: true
+        description: "Kaggle提出ID"
+      public_score:
+        type: "DECIMAL(10,6)"
+        nullable: true
+        description: "パブリックスコア"
+      private_score:
+        type: "DECIMAL(10,6)"
+        nullable: true
+        description: "プライベートスコア"
+      public_rank:
+        type: "INTEGER"
+        nullable: true
+        description: "パブリック順位"
+      private_rank:
+        type: "INTEGER"
+        nullable: true
+        description: "プライベート順位"
+      total_participants:
+        type: "INTEGER"
+        nullable: true
+        description: "総参加者数"
+      submission_status:
+        type: "VARCHAR(50)"
+        default: "pending"
+        enum: ["pending", "submitted", "scored", "failed", "disqualified"]
+        description: "提出ステータス"
+      submitted_at:
+        type: "TIMESTAMPTZ"
+        nullable: true
+        description: "提出時刻"
+      scored_at:
+        type: "TIMESTAMPTZ"
+        nullable: true
+        description: "採点完了時刻"
+      error_message:
+        type: "TEXT"
+        nullable: true
+        description: "エラーメッセージ"
+      created_at:
+        type: "TIMESTAMPTZ"
+        default: "NOW()"
+        nullable: false
+      updated_at:
+        type: "TIMESTAMPTZ"
+        default: "NOW()"
+        nullable: false
+    indexes:
+      - name: "idx_submissions_execution_id"
+        columns: ["execution_id"]
+        unique: false
+      - name: "idx_submissions_public_score"
+        columns: ["public_score"]
+        order: "DESC"
+        unique: false
+      - name: "idx_submissions_submission_status"
+        columns: ["submission_status"]
+        unique: false
+      - name: "idx_submissions_submitted_at"
+        columns: ["submitted_at"]
+        unique: false
+
+  human_interventions:
+    description: "人的介入管理"
+    columns:
+      id:
+        type: "UUID"
+        primary_key: true
+        default: "gen_random_uuid()"
+        nullable: false
+      execution_id:
+        type: "UUID"
+        nullable: false
+        foreign_key:
+          table: "agent_executions"
+          column: "id"
+          on_delete: "CASCADE"
+      intervention_type:
+        type: "VARCHAR(50)"
+        nullable: false
+        enum: ["approval_required", "error_review", "strategy_change", "manual_override"]
+        description: "介入タイプ"
+      priority:
+        type: "VARCHAR(20)"
+        default: "medium"
+        enum: ["low", "medium", "high", "critical"]
+        description: "優先度"
+      status:
+        type: "VARCHAR(50)"
+        default: "pending"
+        enum: ["pending", "reviewed", "approved", "rejected", "escalated"]
+        description: "ステータス"
+      title:
+        type: "VARCHAR(200)"
+        nullable: false
+        description: "タイトル"
+      description:
+        type: "TEXT"
+        nullable: false
+        description: "説明"
+      context_data:
+        type: "JSONB"
+        nullable: true
+        description: "意思決定に関連するデータ"
+      assigned_to:
+        type: "VARCHAR(100)"
+        nullable: true
+        description: "担当者のメールアドレス/ID"
+      response:
+        type: "TEXT"
+        nullable: true
+        description: "レスポンス"
+      response_data:
+        type: "JSONB"
+        nullable: true
+        description: "構造化されたレスポンスデータ"
+      notification_sent:
+        type: "BOOLEAN"
+        default: false
+        description: "通知送信済みか"
+      notification_method:
+        type: "VARCHAR(50)"
+        nullable: true
+        enum: ["slack", "discord", "email"]
+        description: "通知方法"
+      escalation_count:
+        type: "INTEGER"
+        default: 0
+        description: "エスカレーション回数"
+      sla_deadline:
+        type: "TIMESTAMPTZ"
+        nullable: true
+        description: "SLA期限"
+      created_at:
+        type: "TIMESTAMPTZ"
+        default: "NOW()"
+        nullable: false
+      responded_at:
+        type: "TIMESTAMPTZ"
+        nullable: true
+        description: "回答時刻"
+      updated_at:
+        type: "TIMESTAMPTZ"
+        default: "NOW()"
+        nullable: false
+    indexes:
+      - name: "idx_human_interventions_execution_id"
+        columns: ["execution_id"]
+        unique: false
+      - name: "idx_human_interventions_status"
+        columns: ["status"]
+        unique: false
+      - name: "idx_human_interventions_priority"
+        columns: ["priority"]
+        unique: false
+      - name: "idx_human_interventions_sla_deadline"
+        columns: ["sla_deadline"]
+        unique: false
+
+  system_metrics:
+    description: "システムメトリクス"
+    columns:
+      id:
+        type: "UUID"
+        primary_key: true
+        default: "gen_random_uuid()"
+        nullable: false
+      metric_name:
+        type: "VARCHAR(100)"
+        nullable: false
+        description: "メトリクス名"
+      metric_value:
+        type: "DECIMAL(15,6)"
+        nullable: false
+        description: "メトリクス値"
+      metric_type:
+        type: "VARCHAR(50)"
+        nullable: false
+        enum: ["counter", "gauge", "histogram"]
+        description: "メトリクスタイプ"
+      tags:
+        type: "JSONB"
+        nullable: true
+        description: "グループ化用のキー値ペア"
+      execution_id:
+        type: "UUID"
+        nullable: true
+        foreign_key:
+          table: "agent_executions"
+          column: "id"
+          on_delete: "SET NULL"
+      component:
+        type: "VARCHAR(50)"
+        nullable: true
+        enum: ["competition_discovery", "research", "code_generation", "gpu_management", "training", "submission"]
+        description: "コンポーネント名"
+      timestamp:
+        type: "TIMESTAMPTZ"
+        default: "NOW()"
+        nullable: false
+    indexes:
+      - name: "idx_system_metrics_metric_name"
+        columns: ["metric_name"]
+        unique: false
+      - name: "idx_system_metrics_timestamp"
+        columns: ["timestamp"]
+        unique: false
+      - name: "idx_system_metrics_execution_id"
+        columns: ["execution_id"]
+        unique: false
+      - name: "idx_system_metrics_component"
+        columns: ["component"]
+        unique: false
+    partitioning:
+      type: "range"
+      column: "timestamp"
+      strategy: "monthly"
+
+  configurations:
+    description: "システム設定"
+    columns:
+      id:
+        type: "UUID"
+        primary_key: true
+        default: "gen_random_uuid()"
+        nullable: false
+      config_key:
+        type: "VARCHAR(200)"
+        unique: true
+        nullable: false
+        description: "設定キー"
+      config_value:
+        type: "JSONB"
+        nullable: false
+        description: "設定値（JSON）"
+      config_type:
+        type: "VARCHAR(50)"
+        nullable: false
+        enum: ["system", "api", "gpu", "model", "notification"]
+        description: "設定タイプ"
+      description:
+        type: "TEXT"
+        nullable: true
+        description: "設定説明"
+      is_encrypted:
+        type: "BOOLEAN"
+        default: false
+        description: "暗号化済みか"
+      is_sensitive:
+        type: "BOOLEAN"
+        default: false
+        description: "機密情報か"
+      created_at:
+        type: "TIMESTAMPTZ"
+        default: "NOW()"
+        nullable: false
+      updated_at:
+        type: "TIMESTAMPTZ"
+        default: "NOW()"
+        nullable: false
+    indexes:
+      - name: "idx_configurations_config_key"
+        columns: ["config_key"]
+        unique: false
+      - name: "idx_configurations_config_type"
+        columns: ["config_type"]
+        unique: false
+
+# Views Definition
+views:
+  execution_summary:
+    description: "実行サマリーマテリアライズドビュー"
+    type: "materialized"
+    refresh_strategy: "manual"
+    definition: |
+      SELECT 
+        ae.id,
+        ae.competition_id,
+        ae.status,
+        ae.gpu_budget_consumed,
+        COUNT(DISTINCT rr.id) as research_count,
+        COUNT(DISTINCT gc.id) as code_files_count,
+        COUNT(DISTINCT tj.id) as training_jobs_count,
+        COUNT(DISTINCT s.id) as submissions_count,
+        MAX(s.public_score) as best_score,
+        ae.created_at,
+        ae.updated_at
+      FROM agent_executions ae
+      LEFT JOIN research_results rr ON ae.id = rr.execution_id
+      LEFT JOIN generated_code gc ON ae.id = gc.execution_id
+      LEFT JOIN training_jobs tj ON ae.id = tj.execution_id
+      LEFT JOIN submissions s ON ae.id = s.execution_id
+      GROUP BY ae.id
+    indexes:
+      - name: "idx_execution_summary_id"
+        columns: ["id"]
+        unique: true
+
+# Functions and Triggers
+functions:
+  validate_hyperparameters:
+    description: "ハイパーパラメータバリデーション関数"
+    language: "plpgsql"
+    parameters:
+      - name: "params"
+        type: "JSONB"
+    returns: "BOOLEAN"
+    definition: |
+      BEGIN
+        RETURN (
+          params ? 'learning_rate' AND 
+          (params->>'learning_rate')::DECIMAL > 0 AND
+          params ? 'epochs' AND
+          (params->>'epochs')::INTEGER > 0
+        );
+      END;
+
+  encrypt_config_value:
+    description: "設定値暗号化関数"
+    language: "plpgsql"
+    parameters:
+      - name: "value"
+        type: "TEXT"
+    returns: "TEXT"
+    definition: |
+      BEGIN
+        RETURN pgp_sym_encrypt(value, current_setting('app.encryption_key'));
+      END;
+
+# Security Policies
+security:
+  row_level_security:
+    configurations:
+      enabled: true
+      policies:
+        - name: "config_access_policy"
+          type: "ALL"
+          role: "authenticated"
+          condition: "NOT is_sensitive OR auth.role() = 'admin'"
+
+# Data Retention Policies
+data_retention:
+  system_metrics:
+    retention_period: "90 days"
+    cleanup_query: "DELETE FROM system_metrics WHERE timestamp < NOW() - INTERVAL '90 days'"
+  agent_executions:
+    retention_period: "1 year"
+    cleanup_query: "DELETE FROM agent_executions WHERE status IN ('completed', 'failed') AND completed_at < NOW() - INTERVAL '1 year'"
+
+# Backup Strategy
+backup_strategy:
+  full_backup:
+    frequency: "daily"
+    scope: "all_tables"
+  incremental_backup:
+    frequency: "hourly"
+    scope: ["system_metrics", "training_jobs", "human_interventions"]
+  point_in_time_recovery:
+    wal_retention: "24 hours"
+
+# Performance Optimization
+performance:
+  connection_pooling:
+    enabled: true
+    max_connections: 100
+  query_optimization:
+    enable_statistics: true
+    auto_vacuum: true
+  monitoring:
+    slow_query_log: true
+    query_timeout: "30 minutes"
+
+# Migration Strategy
+migration:
+  phases:
+    - name: "phase_1"
+      description: "コアテーブル"
+      tables: ["competitions", "agent_executions"]
+    - name: "phase_2"
+      description: "研究とコード生成"
+      tables: ["research_results", "generated_code"]
+    - name: "phase_3"
+      description: "GPUとトレーニング"
+      tables: ["gpu_sessions", "training_jobs"]
+    - name: "phase_4"
+      description: "メトリクスと設定"
+      tables: ["submissions", "human_interventions", "system_metrics", "configurations"] 

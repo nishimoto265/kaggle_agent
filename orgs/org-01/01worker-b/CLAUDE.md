@@ -1,10 +1,83 @@
 # 🤖 Worker実装指示書
 
-**Version**: 2.0 (AI出力変動活用システム)  
-**Target**: 全Worker（worker1, worker2, worker3）  
-**Update**: 2025-06-05
+**Version**: 3.0 (チェックリスト駆動ワークフロー)  
+**Target**: 全Worker（worker-a, worker-b, worker-c）  
+**Update**: 2025-06-06
 
-> **🎯 重要**: 本システムはAIの出力変動（randomness/fluctuation）を活用し、同一プロンプトから異なる実装を生成して最適解を選択するシステムです
+> **🎯 重要**: 本システムはチェックリスト駆動でBossから受け取ったタスクを実装し、完了時に他Workerと連携して最終報告を行うシステムです
+
+## 🚀 現在のタスク: ハローワールドモジュール作成
+
+### タスク概要
+**あなたのミッション**: "Hello, World!" を出力するモジュールを実装してください
+
+### 具体的要件
+```yaml
+モジュール名: hello_world
+実装必須項目:
+  - "Hello, World!" を出力する関数
+  - コマンドライン実行可能
+  - ユニットテスト完備
+  - 詳細ドキュメント
+  - エラーハンドリング
+
+ファイル構成:
+  - src/hello_world/core.py       # メイン実装
+  - src/hello_world/__init__.py   # モジュール初期化
+  - src/hello_world/cli.py        # CLI実行
+  - tests/test_hello_world.py     # ユニットテスト
+  - docs/hello_world.md           # ドキュメント
+
+品質基準:
+  - テストカバレッジ100%
+  - 型アノテーション完備
+  - リンターエラーなし
+  - 実行時間1秒以内
+  - PEP8準拠
+```
+
+### 実装例（参考）
+```python
+# src/hello_world/core.py
+def hello_world() -> str:
+    """Hello, Worldを返す関数"""
+    return "Hello, World!"
+
+def print_hello_world() -> None:
+    """Hello, Worldを出力する関数"""
+    print(hello_world())
+
+# CLI実行
+if __name__ == "__main__":
+    print_hello_world()
+```
+
+### Worker実行手順
+```bash
+# 1. チェックリスト確認
+cat WORKER_CHECKLIST.md
+
+# 2. 実装開始
+mkdir -p src/hello_world tests docs
+touch src/hello_world/{__init__.py,core.py,cli.py}
+touch tests/test_hello_world.py
+touch docs/hello_world.md
+
+# 3. 実装完了後チェック
+pytest tests/ --cov=src
+ruff check src/
+mypy src/
+
+# 4. 実装完成をチェックリストにマーク
+sed -i 's/\[ \] \*\*実装完成\*\*/[x] **実装完成**/' WORKER_CHECKLIST.md
+
+# 5. 全Worker完了チェック＆Boss報告（自動）
+../../scripts/check_all_workers_done.sh
+
+# または手動で他Worker確認
+# ORG_NUM=$(pwd | grep -o 'org-[0-9][0-9]' | tail -1)
+# grep "\[x\] \*\*実装完成\*\*" ../01worker-*/WORKER_CHECKLIST.md
+```
 
 ## 📖 システム理解
 
@@ -29,76 +102,121 @@
   - 他Workerを意識せず、ベストを尽くす
 ```
 
-## ⚡ 実装プロセス
+## ⚡ チェックリスト駆動実装プロセス
 
-### 1. タスク受信・理解フェーズ
+### 1. タスク受信・チェックリスト確認
 ```bash
+# Boss通知確認
+ls ../../../shared_messages/to_worker-*.md
+
+# Workerチェックリスト確認
+cat WORKER_CHECKLIST.md
+
 # Boss指示書確認
 cat CLAUDE.md
-cat instruction_final_boss.md
-
-# 要件詳細確認
-./scripts/analyze_requirements.py
 ```
 
-### 2. 実装戦略決定
-```yaml
-戦略決定観点:
-  技術選択:
-    - 最適なアルゴリズム・フレームワーク選択
-    - パフォーマンス要件に適した実装方法
-    - 保守性を考慮した設計パターン
-    - 将来拡張を意識したアーキテクチャ
-
-  品質確保:
-    - 堅牢なエラーハンドリング
-    - 包括的なテストケース
-    - 明確なドキュメンテーション
-    - コードレビュー可能な構造
-```
-
-### 3. 実装実行
+### 2. チェックリスト駆動実装
 ```bash
-# プロジェクト初期化
-./scripts/init_implementation.py --task-id ${TASK_ID}
+# チェックリスト項目に沿って順次実装
+# 各項目完了時にチェックマーク更新
 
-# コア実装
-vim src/main.py
-vim src/utils.py
-vim src/config.py
+# 要件理解・設計フェーズ
+vim WORKER_CHECKLIST.md  # 設計項目チェック
 
-# テスト実装
-vim tests/test_main.py
-vim tests/integration_test.py
+# コア実装フェーズ
+vim src/[module]/  # 実装
+vim WORKER_CHECKLIST.md  # 実装項目チェック
 
-# ドキュメント作成
-vim README.md
-vim docs/design.md
+# テスト実装フェーズ
+vim tests/  # テスト作成
+vim WORKER_CHECKLIST.md  # テスト項目チェック
+
+# ドキュメント作成フェーズ
+vim docs/  # ドキュメント作成
+vim WORKER_CHECKLIST.md  # ドキュメント項目チェック
 ```
 
-### 4. 品質検証
+### 3. 品質確認・自己チェック
 ```bash
-# 静的解析
+# 全項目完了確認
+grep "\[ \]" WORKER_CHECKLIST.md  # 未完了項目確認
+
+# 品質基準クリア確認
+pytest tests/ --cov=src
 ruff check src/
 mypy src/
 
-# ユニットテスト
-pytest tests/ -v --cov=src
-
-# 統合テスト
-python tests/integration_test.py
-
-# パフォーマンステスト
-python tests/performance_test.py
+# 自己確認完了
+vim WORKER_CHECKLIST.md  # "実装完成"にチェック
 ```
 
-### 5. 最終提出準備
+### 4. 他Worker確認・最終報告
 ```bash
-# 実装完了報告
-./scripts/report_completion.py --implementation-path ./
+# 自分の実装完成後、他Workerチェック開始
+echo "🔍 他Workerの完成状況を確認中..."
 
-# Boss評価用情報生成
-./scripts/generate_evaluation_report.py
+# 現在の組織番号を取得
+ORG_NUM=$(pwd | grep -o 'org-[0-9][0-9]' | tail -1)
+
+# 他Workerの完成状況確認
+WORKER_A_DONE=$(grep "\[x\] \*\*実装完成\*\*" ../01worker-a/WORKER_CHECKLIST.md 2>/dev/null && echo "1" || echo "0")
+WORKER_B_DONE=$(grep "\[x\] \*\*実装完成\*\*" ../01worker-b/WORKER_CHECKLIST.md 2>/dev/null && echo "1" || echo "0")
+WORKER_C_DONE=$(grep "\[x\] \*\*実装完成\*\*" ../01worker-c/WORKER_CHECKLIST.md 2>/dev/null && echo "1" || echo "0")
+
+echo "Worker-A: $([ $WORKER_A_DONE -eq 1 ] && echo '✅完了' || echo '⏳作業中')"
+echo "Worker-B: $([ $WORKER_B_DONE -eq 1 ] && echo '✅完了' || echo '⏳作業中')"
+echo "Worker-C: $([ $WORKER_C_DONE -eq 1 ] && echo '✅完了' || echo '⏳作業中')"
+
+# 全Worker完成判定
+TOTAL_DONE=$((WORKER_A_DONE + WORKER_B_DONE + WORKER_C_DONE))
+
+if [ $TOTAL_DONE -eq 3 ]; then
+    echo "🎉 全Worker完成！Boss に報告します"
+    
+    # 組織番号からboss指定を決定
+    case $ORG_NUM in
+        "org-01") BOSS_TARGET="boss01" ;;
+        "org-02") BOSS_TARGET="boss02" ;;
+        "org-03") BOSS_TARGET="boss03" ;;
+        "org-04") BOSS_TARGET="boss04" ;;
+        *) BOSS_TARGET="boss01" ;;
+    esac
+    
+    # Boss報告実行
+    ../../scripts/quick_send.sh $BOSS_TARGET "実装が完了しました。"
+    
+    # チェックリスト更新
+    sed -i 's/\[ \] \*\*Boss報告完了\*\*/[x] **Boss報告完了**/' WORKER_CHECKLIST.md
+    
+    echo "✅ Boss報告完了"
+else
+    echo "⏳ 他のWorkerの完了を待機中 ($TOTAL_DONE/3)"
+    echo "💡 30秒後に再チェックします"
+    
+    # 30秒待機後に再チェック（バックグラウンド）
+    (sleep 30 && bash -c '
+        # 再チェック実行
+        WORKER_A_DONE=$(grep "\[x\] \*\*実装完成\*\*" ../01worker-a/WORKER_CHECKLIST.md 2>/dev/null && echo "1" || echo "0")
+        WORKER_B_DONE=$(grep "\[x\] \*\*実装完成\*\*" ../01worker-b/WORKER_CHECKLIST.md 2>/dev/null && echo "1" || echo "0")
+        WORKER_C_DONE=$(grep "\[x\] \*\*実装完成\*\*" ../01worker-c/WORKER_CHECKLIST.md 2>/dev/null && echo "1" || echo "0")
+        TOTAL_DONE=$((WORKER_A_DONE + WORKER_B_DONE + WORKER_C_DONE))
+        
+        if [ $TOTAL_DONE -eq 3 ]; then
+            echo "🎉 全Worker完成確認！Boss に報告"
+            ORG_NUM=$(pwd | grep -o "org-[0-9][0-9]" | tail -1)
+            case $ORG_NUM in
+                "org-01") BOSS_TARGET="boss01" ;;
+                "org-02") BOSS_TARGET="boss02" ;;
+                "org-03") BOSS_TARGET="boss03" ;;
+                "org-04") BOSS_TARGET="boss04" ;;
+                *) BOSS_TARGET="boss01" ;;
+            esac
+            ../../scripts/quick_send.sh $BOSS_TARGET "実装が完了しました。"
+            sed -i "s/\[ \] \*\*Boss報告完了\*\*/[x] **Boss報告完了**/" WORKER_CHECKLIST.md
+        fi
+    ') &
+fi
 ```
 
 ## 📊 評価観点の理解

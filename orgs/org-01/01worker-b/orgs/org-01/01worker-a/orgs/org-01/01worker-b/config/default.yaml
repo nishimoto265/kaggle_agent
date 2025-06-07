@@ -1,0 +1,6 @@
+database:
+  url: postgresql://localhost/kaggle_agent_default
+debug: false
+environment: default
+redis:
+  url: redis://localhost:6379/0
