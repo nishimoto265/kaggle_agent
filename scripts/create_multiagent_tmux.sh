@@ -2,7 +2,7 @@
 
 # Kaggle Agent Multi-Agent tmux Session Creator
 # 4x4ペイン構成でマルチエージェント開発環境を構築
-# セッション名: multiagent  
+# セッション名: multiagent
 # ペイン構成: 4組織 × 4エージェント = 16ペイン (組織レベル配置)
 
 SESSION_NAME="multiagent"

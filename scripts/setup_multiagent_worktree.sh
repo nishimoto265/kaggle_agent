@@ -49,7 +49,7 @@ for ORG_ID in "${organizations[@]}"; do
     echo "================================="
     
     # 既存worktreeの自動削除
-    if [[ -d "$BASE_DIR" ]]; then
+if [[ -d "$BASE_DIR" ]]; then
         log_warn "既存のworktreeが見つかりました: $BASE_DIR - 自動削除中..."
         
         # 各worktreeを個別に削除
@@ -67,40 +67,40 @@ for ORG_ID in "${organizations[@]}"; do
     # ベースディレクトリ作成
     mkdir -p "$BASE_DIR"
 
-    # ベースブランチ確認・作成
-    log_info "ベースブランチを確認中..."
+# ベースブランチ確認・作成
+log_info "ベースブランチを確認中..."
     if ! git show-ref --verify --quiet "refs/heads/orgs/$ORG_ID/base" 2>/dev/null; then
-        log_info "ベースブランチを作成中: orgs/$ORG_ID/base"
+    log_info "ベースブランチを作成中: orgs/$ORG_ID/base"
         git checkout -b "orgs/$ORG_ID/base" 2>/dev/null || true
-        git push -u origin "orgs/$ORG_ID/base" 2>/dev/null || log_warn "ブランチプッシュに失敗（リモートなし？）"
+    git push -u origin "orgs/$ORG_ID/base" 2>/dev/null || log_warn "ブランチプッシュに失敗（リモートなし？）"
         git checkout main 2>/dev/null || true
-    fi
+fi
 
-    # 各Agentブランチ作成・worktree設定
-    declare -a agents=("01boss" "01worker-a" "01worker-b" "01worker-c")
-    declare -a instructions=("boss_instructions.md" "worker_instructions.md" "worker_instructions.md" "worker_instructions.md")
+# 各Agentブランチ作成・worktree設定
+declare -a agents=("01boss" "01worker-a" "01worker-b" "01worker-c")
+declare -a instructions=("boss_instructions.md" "worker_instructions.md" "worker_instructions.md" "worker_instructions.md")
 
-    for i in "${!agents[@]}"; do
-        agent="${agents[$i]}"
-        instruction="${instructions[$i]}"
-        branch_name="orgs/$ORG_ID/$agent"
-        worktree_path="$BASE_DIR/$agent"
-        
+for i in "${!agents[@]}"; do
+    agent="${agents[$i]}"
+    instruction="${instructions[$i]}"
+    branch_name="orgs/$ORG_ID/$agent"
+    worktree_path="$BASE_DIR/$agent"
+    
         log_info "🔧 $ORG_ID/$agent の設定中..."
         
         # ブランチ削除（再作成のため）
         log_info "既存ブランチ削除: $branch_name"
         git branch -D "$branch_name" 2>/dev/null || log_warn "ブランチ $branch_name は存在しないかリモートでは削除できません"
-        
-        # ブランチ作成
+    
+    # ブランチ作成
         log_info "ブランチ作成: $branch_name"
         if ! git branch "$branch_name" main 2>/dev/null; then
             log_warn "ブランチ作成に失敗、リセットして再試行: $branch_name"
             git checkout main 2>/dev/null || true
             git branch -D "$branch_name" 2>/dev/null || true
             git branch "$branch_name" main 2>/dev/null || log_error "ブランチ作成に失敗: $branch_name"
-        fi
-        
+    fi
+    
         # Worktree作成（既存削除してから）
         if [[ -d "$worktree_path" ]]; then
             git worktree remove "$worktree_path" 2>/dev/null || true
@@ -114,20 +114,20 @@ for ORG_ID in "${organizations[@]}"; do
         if [[ ! -d "$worktree_path" ]]; then
             log_error "Worktree作成に失敗: $worktree_path"
             continue
-        fi
-        
-        # Agent指示書配置
-        log_info "指示書配置: docs/$instruction → $worktree_path/CLAUDE.md"
-        cp "docs/$instruction" "$worktree_path/CLAUDE.md"
-        
-        # 初期commit
-        cd "$worktree_path"
+    fi
+    
+    # Agent指示書配置
+    log_info "指示書配置: docs/$instruction → $worktree_path/CLAUDE.md"
+    cp "docs/$instruction" "$worktree_path/CLAUDE.md"
+    
+    # 初期commit
+    cd "$worktree_path"
         git add CLAUDE.md 2>/dev/null || true
         if ! git diff --cached --quiet 2>/dev/null; then
             git commit -m "Add $agent agent instructions for $ORG_ID" 2>/dev/null || log_info "コミット済み"
-        fi
-        cd - > /dev/null
-        
+    fi
+    cd - > /dev/null
+    
         log_success "$ORG_ID/$agent セットアップ完了"
         
         # 作成確認
@@ -136,9 +136,9 @@ for ORG_ID in "${organizations[@]}"; do
         else
             log_error "❌ $worktree_path/CLAUDE.md 作成失敗"
         fi
-    done
-    
-    echo ""
+done
+
+echo ""
     log_success "🏢 組織 $ORG_ID セットアップ完了！"
     echo ""
 done
