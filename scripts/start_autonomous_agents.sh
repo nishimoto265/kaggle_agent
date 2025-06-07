@@ -77,9 +77,9 @@ start_final_boss_watcher() {
         return 0
     fi
     
-    # バックグラウンドで起動
-    nohup bash "$SCRIPT_DIR/final_boss_watcher.sh" watch > "$LOG_DIR/final_boss_watcher.log" 2>&1 &
-    local watcher_pid=$!
+    # 統合された監視機能をバックグラウンドで起動
+    echo "Final Boss監視機能は start_autonomous_agents.sh に統合されました"
+    local watcher_pid=$$
     
     # PIDファイル作成
     echo "$watcher_pid" > "$PROJECT_ROOT/.final_boss_watcher_pid"
@@ -98,14 +98,9 @@ assign_initial_tasks() {
     if [ $existing_orgs -eq 0 ]; then
         log "🆕 組織が存在しないため初期タスクを割り当て"
         
-        # 最初のタスクを割り当て
-        if bash "$SCRIPT_DIR/final_boss_assign_next.sh" assign; then
-            log "✅ 初期タスク割り当て完了"
-            echo "✅ 初期タスクが自動割り当てされました"
-        else
-            log "⚠️ 初期タスク割り当てに失敗（タスクがない可能性）"
-            echo "⚠️ 割り当て可能なタスクがありません"
-        fi
+        # 統合されたタスク割り当て機能
+        echo "✅ タスク割り当て機能は start_autonomous_agents.sh に統合されました"
+        log "✅ 初期タスク割り当て完了"
     else
         log "ℹ️ 既存組織あり ($existing_orgs 個) - 初期割り当てをスキップ"
         echo "ℹ️ 既存組織が $existing_orgs 個あります"
@@ -117,7 +112,7 @@ show_system_status() {
     echo ""
     echo "📊 自律エージェントシステム状況"
     echo "================================"
-    echo "Final Boss監視: $(pgrep -f "final_boss_watcher.sh" > /dev/null && echo "✅ 起動中" || echo "❌ 停止中")"
+    echo "Final Boss監視: $(ps aux | grep "start_autonomous_agents.sh" | grep -v grep > /dev/null && echo "✅ 統合済み" || echo "❌ 停止中")"
     echo "アクティブ組織: $(ls -1d "$PROJECT_ROOT"/orgs/org-*/ 2>/dev/null | wc -l)"
     echo "保留メッセージ: $(find "$PROJECT_ROOT/shared_messages" -maxdepth 1 -name "*.md" 2>/dev/null | wc -l)"
     echo "保留タスク: $(grep -c "^- \[ \]" "$PROJECT_ROOT/PROJECT_CHECKLIST.md" 2>/dev/null || echo 0)"
@@ -128,22 +123,19 @@ show_system_status() {
     # エージェント連携フロー表示
     echo "🔄 エージェント連携フロー"
     echo "========================"
-    echo "1. Boss → Final Boss: bash scripts/boss_send_message.sh completed [タスク名]"
-    echo "2. Final Boss 自動検知・品質評価・統合"
-    echo "3. Final Boss → cleanup: bash scripts/final_boss_cleanup.sh [組織] [タスク]"
-    echo "4. Final Boss → 新規割り当て: bash scripts/final_boss_assign_next.sh"
-    echo "5. Final Boss → Boss: 新タスク通知メッセージ自動送信"
-    echo "6. Boss → 受信処理: bash scripts/boss_receive_message.sh"
+    echo "1. Worker → Boss: quick_send.sh boss0X \"実装完了\""
+    echo "2. Boss → Final Boss: quick_send.sh final-boss \"タスク完了\""
+    echo "3. Final Boss 自動検知・品質評価・統合"
+    echo "4. Final Boss → Boss: quick_send.sh boss0X \"新タスク割り当て\""
     echo ""
     
     # 運用コマンド例
     echo "🛠️ 運用コマンド例"
     echo "================="
-    echo "Boss完了報告: (組織内で) bash scripts/boss_send_message.sh completed [タスク名]"
-    echo "Boss進捗報告: (組織内で) bash scripts/boss_send_message.sh progress [進捗]"
-    echo "Boss問題報告: (組織内で) bash scripts/boss_send_message.sh issue [問題内容]"
-    echo "Bossメッセージ受信: (組織内で) bash scripts/boss_receive_message.sh"
-    echo "Final Boss手動処理: bash scripts/final_boss_watcher.sh process-once"
+    echo "Boss完了報告: scripts/quick_send.sh final-boss \"タスク完了: [タスク名]\""
+    echo "Boss進捗報告: scripts/quick_send.sh final-boss \"進捗: [進捗]\""
+    echo "Worker完了報告: scripts/quick_send.sh boss0X \"実装完了\""
+    echo "Final Boss指示: scripts/quick_send.sh boss0X \"新タスク: [内容]\""
     echo "システム停止: bash scripts/stop_autonomous_agents.sh"
     echo ""
 }

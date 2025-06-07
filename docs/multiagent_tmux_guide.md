@@ -268,7 +268,8 @@ tmux pipe-pane -t multiagent:0.1 'cat >> logs/worker-a01.log'
 - [`boss_instructions.md`](boss_instructions.md) - Boss Agent専用指示書
 - [`worker_instructions.md`](worker_instructions.md) - Worker Agent統合指示書
 - [`tmux_parallel_development_spec.md`](tmux_parallel_development_spec.md) - tmux並列開発仕様
-- [`checklist_driven_development_spec.md`](checklist_driven_development_spec.md) - 統一開発プロセス
+- [`worker_instructions.md`](worker_instructions.md) - Worker実装指示書
+- [`boss_instructions.md`](boss_instructions.md) - Boss管理指示書
 
 ---
 

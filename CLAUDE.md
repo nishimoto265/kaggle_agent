@@ -204,7 +204,7 @@ python scripts/maintenance/database_recovery.py
 - **[`docs/project_structure.md`](docs/project_structure.md)** - Complete directory structure, file organization (56KB, 1368 lines)
 
 ### 🤖 Multi-Agent Development System
-- **[`docs/checklist_driven_development_spec.md`](docs/checklist_driven_development_spec.md)** - Unified task system, checklist automation (21KB, 666 lines)
+- **[`docs/worker_instructions.md`](docs/worker_instructions.md)** - Worker実装指示書、チェックリスト駆動ワークフロー
 - **[`docs/tmux_parallel_development_spec.md`](docs/tmux_parallel_development_spec.md)** - tmux session management, parallel workspace setup (32KB, 857 lines)
 - **[`docs/multi_agent_evaluation_process.md`](docs/multi_agent_evaluation_process.md)** - Boss evaluation criteria, integration workflow (12KB, 478 lines)
 
@@ -224,7 +224,7 @@ For...                          Read...
 ├─ "How does the system work?" → architecture_design.md
 ├─ "What should I build?"      → requirements.md
 ├─ "How to develop properly?"  → implementation_best_practices.md
-├─ "How to use multi-agent?"   → checklist_driven_development_spec.md
+├─ "How to use multi-agent?"   → worker_instructions.md + boss_instructions.md
 ├─ "How to run parallel dev?"  → tmux_parallel_development_spec.md
 ├─ "How does evaluation work?" → multi_agent_evaluation_process.md
 ├─ "How to design database?"   → database_design.md
@@ -233,7 +233,7 @@ For...                          Read...
 
 ### 🎯 Document Responsibilities
 - **Structure Definition**: Only `project_structure.md` defines directories/files
-- **Process Definition**: Only `checklist_driven_development_spec.md` defines workflows
+- **Process Definition**: `worker_instructions.md` と `boss_instructions.md` がワークフローを定義
 - **Architecture Definition**: Only `architecture_design.md` defines system design
 - **All others**: Reference these 3 core docs and focus on their specialty
 

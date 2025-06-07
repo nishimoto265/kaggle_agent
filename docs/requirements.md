@@ -17,7 +17,7 @@
 ## 3 高レベルワークフロー
 
 > **🏗️ システムアーキテクチャ**: 詳細なワークフロー・データフロー設計は [`architecture_design.md`](architecture_design.md) を参照  
-> **📋 開発プロセス**: 実装フローは [`checklist_driven_development_spec.md`](checklist_driven_development_spec.md) を参照
+> **📋 開発プロセス**: 実装フローは [`worker_instructions.md`](worker_instructions.md) と [`boss_instructions.md`](boss_instructions.md) を参照
 
 1. **コンペティション選択**（現状は手動）
 2. **データ取得**: Kaggle API 経由でメタデータとデータセットを取得

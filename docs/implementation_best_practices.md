@@ -56,7 +56,7 @@
 
 ## Boss運用ベストプラクティス
 
-> **📋 チェックリスト**: 統一タスク・チェックリスト仕様は [`checklist_driven_development_spec.md`](checklist_driven_development_spec.md) を参照  
+> **📋 チェックリスト**: 統一タスク・チェックリスト仕様は [`worker_instructions.md`](worker_instructions.md) を参照  
 > **🏗️ アーキテクチャ**: システム設計原則は [`architecture_design.md`](architecture_design.md) を参照
 
 ### 効果的なタスク定義

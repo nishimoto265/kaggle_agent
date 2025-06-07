@@ -116,4 +116,4 @@ fi
 echo "🎯 タスク作成完了:"
 echo "📄 要件書: $TASK_DIR/${TASK_NAME}_requirements.md"
 echo "📋 チェックリスト: $TASK_DIR/${TASK_NAME}_checklist.md"
-echo "📂 次のステップ: ./scripts/assign_task_to_boss.sh \"$ORG_NAME\" \"$TASK_NAME\"" 
+echo "📂 次のステップ: ./scripts/quick_send.sh boss0X \"新タスク: $TASK_NAME を開始してください\"" 

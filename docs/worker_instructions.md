@@ -6,50 +6,34 @@
 
 > **🎯 重要**: 本システムはチェックリスト駆動でBossから受け取ったタスクを実装し、完了時に他Workerと連携して最終報告を行うシステムです
 
-## 🚀 現在のタスク: ハローワールドモジュール作成
+## 🚀 タスク実装フロー
 
 ### タスク概要
-**あなたのミッション**: "Hello, World!" を出力するモジュールを実装してください
+**あなたのミッション**: Bossから指示されたモジュールを実装してください
 
-### 具体的要件
+### 実装テンプレート
 ```yaml
-モジュール名: hello_world
+モジュール名: [BOSS指定]
 実装必須項目:
-  - "Hello, World!" を出力する関数
-  - コマンドライン実行可能
+  - 要求された機能の実装
+  - エラーハンドリング
   - ユニットテスト完備
   - 詳細ドキュメント
-  - エラーハンドリング
+  - 型アノテーション
 
 ファイル構成:
-  - src/hello_world/core.py       # メイン実装
-  - src/hello_world/__init__.py   # モジュール初期化
-  - src/hello_world/cli.py        # CLI実行
-  - tests/test_hello_world.py     # ユニットテスト
-  - docs/hello_world.md           # ドキュメント
+  - src/[module_name]/core.py       # メイン実装
+  - src/[module_name]/__init__.py   # モジュール初期化
+  - src/[module_name]/cli.py        # CLI実行（必要に応じて）
+  - tests/test_[module_name].py     # ユニットテスト
+  - docs/[module_name].md           # ドキュメント
 
 品質基準:
-  - テストカバレッジ100%
+  - テストカバレッジ95%以上
   - 型アノテーション完備
   - リンターエラーなし
-  - 実行時間1秒以内
+  - パフォーマンス要件満足
   - PEP8準拠
-```
-
-### 実装例（参考）
-```python
-# src/hello_world/core.py
-def hello_world() -> str:
-    """Hello, Worldを返す関数"""
-    return "Hello, World!"
-
-def print_hello_world() -> None:
-    """Hello, Worldを出力する関数"""
-    print(hello_world())
-
-# CLI実行
-if __name__ == "__main__":
-    print_hello_world()
 ```
 
 ### Worker実行手順
@@ -57,26 +41,25 @@ if __name__ == "__main__":
 # 1. チェックリスト確認
 cat WORKER_CHECKLIST.md
 
-# 2. 実装開始
-mkdir -p src/hello_world tests docs
-touch src/hello_world/{__init__.py,core.py,cli.py}
-touch tests/test_hello_world.py
-touch docs/hello_world.md
+# 2. Boss指示の確認（CLAUDE.mdまたは直接指示）
+cat CLAUDE.md  # Boss指示書確認
 
-# 3. 実装完了後チェック
+# 3. 実装開始（モジュール名はBoss指定に従う）
+mkdir -p src/[module_name] tests docs
+touch src/[module_name]/{__init__.py,core.py}
+touch tests/test_[module_name].py
+touch docs/[module_name].md
+
+# 4. 実装完了後チェック
 pytest tests/ --cov=src
 ruff check src/
 mypy src/
 
-# 4. 実装完成をチェックリストにマーク
+# 5. 実装完成をチェックリストにマーク
 sed -i 's/\[ \] \*\*実装完成\*\*/[x] **実装完成**/' WORKER_CHECKLIST.md
 
-# 5. 全Worker完了チェック＆Boss報告（自動）
+# 6. 全Worker完了チェック＆Boss報告（必須）
 ../../scripts/check_all_workers_done.sh
-
-# または手動で他Worker確認
-# ORG_NUM=$(pwd | grep -o 'org-[0-9][0-9]' | tail -1)
-# grep "\[x\] \*\*実装完成\*\*" ../01worker-*/WORKER_CHECKLIST.md
 ```
 
 ## 📖 システム理解
@@ -106,9 +89,6 @@ sed -i 's/\[ \] \*\*実装完成\*\*/[x] **実装完成**/' WORKER_CHECKLIST.md
 
 ### 1. タスク受信・チェックリスト確認
 ```bash
-# Boss通知確認
-ls ../../../shared_messages/to_worker-*.md
-
 # Workerチェックリスト確認
 cat WORKER_CHECKLIST.md
 
@@ -151,9 +131,9 @@ mypy src/
 vim WORKER_CHECKLIST.md  # "実装完成"にチェック
 ```
 
-### 4. 他Worker確認・最終報告
+### 4. 完了報告
 ```bash
-# 自分の実装完成後、他Workerチェック開始
+# 自分の実装完成後、他Workerの完了状況確認
 echo "🔍 他Workerの完成状況を確認中..."
 
 # 現在の組織番号を取得
@@ -287,26 +267,6 @@ import timeit
 import pytest-benchmark
 ```
 
-## 🔄 進捗報告システム
-
-### 定期報告（30分間隔）
-```bash
-# 進捗状況更新
-./scripts/update_progress.py --status "implementing_core_logic" --completion 45
-
-# 主要マイルストーン報告
-./scripts/report_milestone.py --milestone "architecture_complete"
-```
-
-### 問題発生時の報告
-```bash
-# 技術的問題
-./scripts/report_issue.py --type "technical" --desc "Memory optimization needed"
-
-# 要件不明確時
-./scripts/request_clarification.py --topic "API specification details"
-```
-
 ## 🚫 注意事項
 
 ### やってはいけないこと
@@ -320,6 +280,35 @@ import pytest-benchmark
 - **創造性と安定性バランス**: 革新的だが信頼性の高い実装
 - **完成度重視**: 部分的な優秀さより全体の完成度
 - **継続的改善**: レビューフィードバックの積極的活用
+
+## 🛠️ 必須スクリプト使用法
+
+### Worker用スクリプト
+```bash
+# 緊急時のBoss連絡
+../../scripts/quick_send.sh boss01 "緊急: エラーが発生しました"
+```
+
+### 開発環境セットアップ（初回のみ）
+```bash
+# 1. マルチエージェント環境構築（初回のみ）
+./scripts/setup_multiagent_worktree.sh
+
+# 2. tmux開発環境起動
+./scripts/create_multiagent_tmux.sh
+
+# 3. システム監視開始
+./scripts/start_autonomous_agents.sh start
+```
+
+### タスク管理スクリプト（Final Boss用参考）
+```bash
+# 新タスク作成
+./scripts/create_task_unit.sh "task_name" "org-01" "High" "Complex"
+
+# 統合処理
+./scripts/integrate_to_main.sh "org-01" "task_name"
+```
 
 ## 📚 参考資料
 
