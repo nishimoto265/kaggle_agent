@@ -33,81 +33,181 @@ kaggle_agent/
 │
 ├── orgs/                               # マルチエージェント開発ワークスペース
 │   ├── org-01/                         # Core Infrastructure 組織
+│   │   ├── shared_org01/               # org-01共有リソース
+│   │   │   ├── tdd_task_checklist.md   # V字モデルTDDタスクリスト
+│   │   │   ├── test_phase_progress/    # テスト作成フェーズ進捗
+│   │   │   │   ├── unit_test_status.md # 単体テスト進捗管理
+│   │   │   │   └── boss_test_status.md # Boss統合・システムテスト進捗
+│   │   │   ├── implementation_progress/ # 実装フェーズ進捗
+│   │   │   │   ├── worker_a_status.md
+│   │   │   │   ├── worker_b_status.md
+│   │   │   │   └── worker_c_status.md
+│   │   │   └── boss_evaluation/        # Boss評価結果
+│   │   │       ├── test_quality_review.md
+│   │   │       ├── implementation_comparison.md
+│   │   │       └── integration_plan.md
 │   │   ├── 01boss/                     # Boss Agent ワークスペース
-│   │   │   ├── CLAUDE.md               # Boss Agent 専用指示書
-│   │   │   ├── evaluation/             # 評価レポート・統合判断
-│   │   │   └── [評価対象ファイル]
+│   │   │   ├── CLAUDE.md               # Boss Agent 専用指示書（V字TDD対応）
+│   │   │   ├── system_tests/           # システムテスト作成・実行
+│   │   │   ├── integration_tests/      # 統合テスト作成・実行
+│   │   │   ├── test_evaluation/        # テスト品質評価
+│   │   │   └── implementation_integration/ # 実装統合・評価
 │   │   ├── 01worker-a/                 # Worker A ワークスペース
-│   │   │   ├── CLAUDE.md               # Worker A 専用指示書
+│   │   │   ├── CLAUDE.md               # Worker A 専用指示書（TDD対応）
 │   │   │   ├── current_task.md         # 現在のタスク情報
-│   │   │   ├── src/                    # パフォーマンス重視実装
-│   │   │   ├── tests/                  # テストコード
-│   │   │   └── docs/                   # 実装ドキュメント
+│   │   │   ├── unit_tests/             # 単体テスト作成（Phase1）
+│   │   │   ├── src/                    # TDD実装（Phase3）
+│   │   │   └── docs/                   # テスト・実装ドキュメント
 │   │   ├── 01worker-b/                 # Worker B ワークスペース
-│   │   │   ├── CLAUDE.md               # Worker B 専用指示書
+│   │   │   ├── CLAUDE.md               # Worker B 専用指示書（TDD対応）
 │   │   │   ├── current_task.md         # 現在のタスク情報
-│   │   │   ├── src/                    # 保守性重視実装
-│   │   │   ├── tests/                  # テストコード
-│   │   │   └── docs/                   # 実装ドキュメント
+│   │   │   ├── unit_tests/             # 単体テスト作成（Phase1）
+│   │   │   ├── src/                    # TDD実装（Phase3）
+│   │   │   └── docs/                   # テスト・実装ドキュメント
 │   │   └── 01worker-c/                 # Worker C ワークスペース
-│   │       ├── CLAUDE.md               # Worker C 専用指示書
+│   │       ├── CLAUDE.md               # Worker C 専用指示書（TDD対応）
 │   │       ├── current_task.md         # 現在のタスク情報
-│   │       ├── src/                    # 拡張性重視実装
-│   │       ├── tests/                  # テストコード
-│   │       └── docs/                   # 実装ドキュメント
+│   │       ├── unit_tests/             # 単体テスト作成（Phase1）
+│   │       ├── src/                    # TDD実装（Phase3）
+│   │       └── docs/                   # テスト・実装ドキュメント
 │   │
 │   ├── org-02/                         # Application Modules 組織
+│   │   ├── shared_org02/               # org-02共有リソース
+│   │   │   ├── tdd_task_checklist.md   # V字モデルTDDタスクリスト
+│   │   │   ├── test_phase_progress/    # テスト作成フェーズ進捗
+│   │   │   ├── implementation_progress/ # 実装フェーズ進捗
+│   │   │   └── boss_evaluation/        # Boss評価結果
 │   │   ├── 02boss/                     # Boss Agent ワークスペース
-│   │   ├── 02worker-a/                 # パフォーマンス重視 Worker
-│   │   ├── 02worker-b/                 # 保守性重視 Worker
-│   │   └── 02worker-c/                 # 拡張性重視 Worker
+│   │   │   ├── CLAUDE.md               # Boss Agent 専用指示書（V字TDD対応）
+│   │   │   ├── system_tests/           # システムテスト作成・実行
+│   │   │   ├── integration_tests/      # 統合テスト作成・実行
+│   │   │   ├── test_evaluation/        # テスト品質評価
+│   │   │   └── implementation_integration/ # 実装統合・評価
+│   │   ├── 02worker-a/                 # Worker A（パフォーマンス重視）
+│   │   │   ├── CLAUDE.md               # Worker A 専用指示書（TDD対応）
+│   │   │   ├── current_task.md         # 現在のタスク情報
+│   │   │   ├── unit_tests/             # 単体テスト作成（Phase1）
+│   │   │   ├── src/                    # TDD実装（Phase3）
+│   │   │   └── docs/                   # テスト・実装ドキュメント
+│   │   ├── 02worker-b/                 # Worker B（保守性重視）
+│   │   │   ├── CLAUDE.md
+│   │   │   ├── current_task.md
+│   │   │   ├── unit_tests/
+│   │   │   ├── src/
+│   │   │   └── docs/
+│   │   └── 02worker-c/                 # Worker C（拡張性重視）
+│   │       ├── CLAUDE.md
+│   │       ├── current_task.md
+│   │       ├── unit_tests/
+│   │       ├── src/
+│   │       └── docs/
 │   │
 │   ├── org-03/                         # Interfaces 組織
+│   │   ├── shared_org03/               # org-03共有リソース
+│   │   │   ├── tdd_task_checklist.md   # V字モデルTDDタスクリスト
+│   │   │   ├── test_phase_progress/    # テスト作成フェーズ進捗
+│   │   │   ├── implementation_progress/ # 実装フェーズ進捗
+│   │   │   └── boss_evaluation/        # Boss評価結果
 │   │   ├── 03boss/                     # Boss Agent ワークスペース
-│   │   ├── 03worker-a/                 # パフォーマンス重視 Worker
-│   │   ├── 03worker-b/                 # 保守性重視 Worker
-│   │   └── 03worker-c/                 # 拡張性重視 Worker
+│   │   │   ├── CLAUDE.md               # Boss Agent 専用指示書（V字TDD対応）
+│   │   │   ├── system_tests/           # システムテスト作成・実行
+│   │   │   ├── integration_tests/      # 統合テスト作成・実行
+│   │   │   ├── test_evaluation/        # テスト品質評価
+│   │   │   └── implementation_integration/ # 実装統合・評価
+│   │   ├── 03worker-a/                 # Worker A（パフォーマンス重視）
+│   │   │   ├── CLAUDE.md               # Worker A 専用指示書（TDD対応）
+│   │   │   ├── current_task.md         # 現在のタスク情報
+│   │   │   ├── unit_tests/             # 単体テスト作成（Phase1）
+│   │   │   ├── src/                    # TDD実装（Phase3）
+│   │   │   └── docs/                   # テスト・実装ドキュメント
+│   │   ├── 03worker-b/                 # Worker B（保守性重視）
+│   │   │   ├── CLAUDE.md
+│   │   │   ├── current_task.md
+│   │   │   ├── unit_tests/
+│   │   │   ├── src/
+│   │   │   └── docs/
+│   │   └── 03worker-c/                 # Worker C（拡張性重視）
+│   │       ├── CLAUDE.md
+│   │       ├── current_task.md
+│   │       ├── unit_tests/
+│   │       ├── src/
+│   │       └── docs/
 │   │
 │   └── org-04/                         # Quality Assurance 組織
+│       ├── shared_org04/               # org-04共有リソース
+│       │   ├── tdd_task_checklist.md   # V字モデルTDDタスクリスト
+│       │   ├── test_phase_progress/    # テスト作成フェーズ進捗
+│       │   ├── implementation_progress/ # 実装フェーズ進捗
+│       │   └── boss_evaluation/        # Boss評価結果
 │       ├── 04boss/                     # Boss Agent ワークスペース
-│       ├── 04worker-a/                 # パフォーマンス重視 Worker
-│       ├── 04worker-b/                 # 保守性重視 Worker
-│       └── 04worker-c/                 # 拡張性重視 Worker
+│       │   ├── CLAUDE.md               # Boss Agent 専用指示書（V字TDD対応）
+│       │   ├── system_tests/           # システムテスト作成・実行
+│       │   ├── integration_tests/      # 統合テスト作成・実行
+│       │   ├── test_evaluation/        # テスト品質評価
+│       │   └── implementation_integration/ # 実装統合・評価
+│       ├── 04worker-a/                 # Worker A（パフォーマンス重視）
+│       │   ├── CLAUDE.md               # Worker A 専用指示書（TDD対応）
+│       │   ├── current_task.md         # 現在のタスク情報
+│       │   ├── unit_tests/             # 単体テスト作成（Phase1）
+│       │   ├── src/                    # TDD実装（Phase3）
+│       │   └── docs/                   # テスト・実装ドキュメント
+│       ├── 04worker-b/                 # Worker B（保守性重視）
+│       │   ├── CLAUDE.md
+│       │   ├── current_task.md
+│       │   ├── unit_tests/
+│       │   ├── src/
+│       │   └── docs/
+│       └── 04worker-c/                 # Worker C（拡張性重視）
+│           ├── CLAUDE.md
+│           ├── current_task.md
+│           ├── unit_tests/
+│           ├── src/
+│           └── docs/
 │
 └── shared/                             # マルチエージェント共通リソース
+    ├── tdd_implementation_checklist.md # V字モデルベースTDD実装統一チェックリスト
     ├── prompts/                        # プロンプト管理システム
     │   ├── templates/                  # プロンプトテンプレート
+    │   │   ├── final_boss/             # Final Boss用プロンプト
+    │   │   │   ├── base_prompt.md      # 基本役割プロンプト
+    │   │   │   ├── tdd_management_prompt.md # V字モデルTDD管理プロンプト
+    │   │   │   ├── system_test_prompt.md # システムテスト作成プロンプト
+    │   │   │   ├── integration_test_prompt.md # 統合テスト作成プロンプト
+    │   │   │   └── context_variables.yaml # コンテキスト変数定義
     │   │   ├── boss/                   # Boss Agent用プロンプト
     │   │   │   ├── base_prompt.md      # 基本役割プロンプト
-    │   │   │   ├── evaluation_prompt.md # 評価専用プロンプト
-    │   │   │   ├── integration_prompt.md # 統合判断プロンプト
+    │   │   │   ├── tdd_boss_prompt.md  # V字モデルBoss管理プロンプト
+    │   │   │   ├── test_evaluation_prompt.md # テスト品質評価プロンプト
+    │   │   │   ├── implementation_evaluation_prompt.md # 実装評価プロンプト
     │   │   │   └── context_variables.yaml # コンテキスト変数定義
     │   │   ├── worker_a/               # Worker A用プロンプト（パフォーマンス重視）
     │   │   │   ├── base_prompt.md      # 基本役割プロンプト
-    │   │   │   ├── implementation_prompt.md # 実装専用プロンプト
-    │   │   │   ├── tdd_prompt.md       # TDD専用プロンプト
+    │   │   │   ├── unit_test_prompt.md # 単体テスト作成プロンプト
+    │   │   │   ├── tdd_implementation_prompt.md # TDD実装プロンプト
     │   │   │   └── context_variables.yaml # コンテキスト変数定義
     │   │   ├── worker_b/               # Worker B用プロンプト（保守性重視）
     │   │   │   ├── base_prompt.md
-    │   │   │   ├── implementation_prompt.md
-    │   │   │   ├── tdd_prompt.md
+    │   │   │   ├── unit_test_prompt.md
+    │   │   │   ├── tdd_implementation_prompt.md
     │   │   │   └── context_variables.yaml
     │   │   └── worker_c/               # Worker C用プロンプト（拡張性重視）
     │   │       ├── base_prompt.md
-    │   │       ├── implementation_prompt.md
-    │   │       ├── tdd_prompt.md
+    │   │       ├── unit_test_prompt.md
+    │   │       ├── tdd_implementation_prompt.md
     │   │       └── context_variables.yaml
     │   ├── generators/                 # プロンプト生成器
     │   │   ├── prompt_builder.py       # 動的プロンプト構築
     │   │   ├── context_injector.py     # コンテキスト情報注入
+    │   │   ├── tdd_context_generator.py # TDD専用コンテキスト生成
     │   │   └── template_processor.py   # テンプレート処理
     │   ├── versions/                   # プロンプトバージョン管理
     │   │   ├── v1.0/                   # バージョン1.0
-    │   │   ├── v1.1/                   # バージョン1.1
-    │   │   └── current -> v1.1         # 現在バージョンのシンボリックリンク
+    │   │   ├── v2.0/                   # バージョン2.0（V字TDD対応）
+    │   │   └── current -> v2.0         # 現在バージョンのシンボリックリンク
     │   └── config/                     # プロンプト設定
     │       ├── prompt_config.yaml      # 全体設定
     │       ├── role_mappings.yaml      # ロール別マッピング
+    │       ├── tdd_phase_config.yaml   # TDDフェーズ別設定
     │       └── context_sources.yaml    # コンテキスト情報源定義
     │
     ├── instructions/                   # 共通指示書・ガイドライン
