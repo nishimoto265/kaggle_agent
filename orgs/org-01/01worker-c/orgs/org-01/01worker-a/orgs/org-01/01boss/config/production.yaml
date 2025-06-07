@@ -1,6 +1,0 @@
-database:
-  url: postgresql://localhost/kaggle_agent_production
-debug: false
-environment: production
-redis:
-  url: redis://localhost:6379/0
